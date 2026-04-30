@@ -32,7 +32,11 @@ class JobSkillService
             "Extract concise skill keywords from the following job description. Return a comma separated list of skill names only (no sentences, no extra text). Keep them lowercase and trim whitespace:\n\n{{job_description}}"
         );
 
-        $response = $this->ollamaService->postToOllama($prompt, $config);
+        try {
+            $response = $this->ollamaService->postToOllama($prompt, $config);
+        } catch (\Throwable) {
+            return;
+        }
         if (! $response->successful()) {
             return;
         }
