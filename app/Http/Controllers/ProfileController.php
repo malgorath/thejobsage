@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Redirect;
 use Illuminate\View\View;
 use App\Models\Resume;
+use App\Models\Application;
 
 class ProfileController extends Controller
 {
@@ -24,11 +25,14 @@ class ProfileController extends Controller
 
     public function dashboard(): View
     {
-        // Collect all resumes for the authenticated user
-        $resumes = Resume::where('user_id', Auth::id())->get();
+        $user = Auth::user()->load('userDetail', 'userSkills.skill');
+        $resumes = Resume::where('user_id', Auth::id())->latest()->get();
+        $applications = Application::where('user_id', Auth::id())
+            ->with('job')
+            ->latest()
+            ->get();
 
-        // return view with resumes
-        return view('dashboard', compact('resumes'));
+        return view('dashboard', compact('user', 'resumes', 'applications'));
     }
 
     /**
