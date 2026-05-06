@@ -306,9 +306,7 @@ php artisan test --coverage
 
 ## Roadmap
 
-- **Agentic workflows** — autonomous agents to scrape job boards based on resume keywords
 - **Vector database** — migrate to pgvector/ChromaDB for semantic search across large job sets
-- **Cover letter generator** — context-aware generation using resume + job description
 - **LinkedIn integration** — one-click profile import and sync
 
 ---
