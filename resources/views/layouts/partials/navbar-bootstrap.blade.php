@@ -26,17 +26,7 @@
                             <i class="bi bi-speedometer2"></i> Dashboard
                         </a>
                     </li>
-                    <li class="nav-item">
-                        <a class="nav-link {{ request()->routeIs('resumes.*') ? 'active' : '' }}" href="{{ route('resumes.index') }}">
-                            <i class="bi bi-file-earmark-person"></i> My Resumes
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link {{ request()->routeIs('applications.*') ? 'active' : '' }}" href="{{ route('applications.index') }}">
-                            <i class="bi bi-clipboard-check"></i> Applications
-                        </a>
-                    </li>
-                @endauth
+@endauth
             </ul>
 
             <!-- Right Side Of Navbar -->
