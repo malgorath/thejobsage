@@ -6,14 +6,14 @@
             <div class="col-12">
                 <div class="card shadow-sm">
                     <div class="card-body p-5">
-                        <h1 class="display-5 fw-bold mb-4">Resume Builder AI</h1>
+                        <h1 class="display-5 fw-bold mb-4">JobSage</h1>
                         
                         <div class="mb-4">
                             <img src="{{ asset('images/rbai-logo.png') }}" alt="{{ config('app.name', 'Laravel') }} Logo" class="float-start me-4 mb-3" style="width: 80px; height: auto; max-width: 15%;">
                             
                             <div class="text-start">
                                 <p class="lead mb-3">
-                                    <strong>Resume Builder AI</strong> is an intelligent job search platform that leverages artificial intelligence to help job seekers optimize their resumes, discover relevant opportunities, and streamline their application process.
+                                    <strong>JobSage</strong> is an intelligent job search platform that leverages artificial intelligence to help job seekers optimize their resumes, discover relevant opportunities, and streamline their application process.
                                 </p>
                                 
                                 <p class="mb-3">
@@ -32,7 +32,7 @@
                                 </ul>
                                 
                                 <p class="mb-0">
-                                    Built with modern web technologies and powered by <strong>Ollama</strong> for AI capabilities, Resume Builder AI provides a seamless, secure, and efficient solution for job seekers looking to advance their careers. Whether you're actively searching for new opportunities or preparing for future applications, our platform helps you present your best professional self.
+                                    Built with modern web technologies and powered by <strong>Ollama</strong> for AI capabilities, JobSage provides a seamless, secure, and efficient solution for job seekers looking to advance their careers. Whether you're actively searching for new opportunities or preparing for future applications, our platform helps you present your best professional self.
                                 </p>
                             </div>
                         </div>

@@ -4,14 +4,14 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: resume-builder-app
+    container_name: jobsage-app
     restart: unless-stopped
     working_dir: /var/www/html
     volumes:
       - ./:/var/www/html
       - ./docker/php/local.ini:/usr/local/etc/php/conf.d/local.ini
     networks:
-      - resume-network
+      - jobsage-network
     depends_on:
       - db
       - redis
@@ -19,22 +19,22 @@ services:
   # Nginx Web Server
   nginx:
     image: nginx:alpine
-    container_name: resume-builder-nginx
+    container_name: jobsage-nginx
     restart: unless-stopped
     ports:
-      - "0.0.0.0:7500:80"
+      - "7500:80"
     volumes:
       - ./:/var/www/html
       - ./docker/nginx/nginx.conf:/etc/nginx/conf.d/default.conf
     networks:
-      - resume-network
+      - jobsage-network
     depends_on:
       - app
 
   # MySQL Database
   db:
     image: mysql:8.0
-    container_name: resume-builder-db
+    container_name: jobsage-db
     restart: unless-stopped
     environment:
       MYSQL_DATABASE: ${DB_DATABASE:-resume_builder}
@@ -46,38 +46,38 @@ services:
     ports:
       - "3306:3306"
     networks:
-      - resume-network
+      - jobsage-network
 
   # Redis Cache
   redis:
     image: redis:alpine
-    container_name: resume-builder-redis
+    container_name: jobsage-redis
     restart: unless-stopped
     ports:
       - "6379:6379"
     networks:
-      - resume-network
+      - jobsage-network
 
   # Queue Worker
   queue:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: resume-builder-queue
+    container_name: jobsage-queue
     restart: unless-stopped
     working_dir: /var/www/html
     command: php artisan queue:work --sleep=3 --tries=3
     volumes:
       - ./:/var/www/html
     networks:
-      - resume-network
+      - jobsage-network
     depends_on:
       - app
       - db
       - redis
 
 networks:
-  resume-network:
+  jobsage-network:
     driver: bridge
 
 volumes:
