@@ -9,8 +9,6 @@
                         <h1 class="display-5 fw-bold mb-4">JobSage</h1>
                         
                         <div class="mb-4">
-                            <img src="{{ asset('images/rbai-logo.png') }}" alt="{{ config('app.name', 'Laravel') }} Logo" class="float-start me-4 mb-3" style="width: 80px; height: auto; max-width: 15%;">
-                            
                             <div class="text-start">
                                 <p class="lead mb-3">
                                     <strong>JobSage</strong> is an intelligent job search platform that leverages artificial intelligence to help job seekers optimize their resumes, discover relevant opportunities, and streamline their application process.
