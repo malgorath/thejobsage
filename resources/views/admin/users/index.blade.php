@@ -16,9 +16,9 @@
                         <th>Name</th>
                         <th>Email</th>
                         <th>Role</th>
-                        <th>Resumes</th>
-                        <th>Applications</th>
+                        <th>Candidates Uploaded</th>
                         <th>Joined</th>
+                        <th>Actions</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -28,13 +28,23 @@
                             <td>{{ $user->name }}</td>
                             <td>{{ $user->email }}</td>
                             <td>
-                                <span class="badge bg-{{ $user->role === 'admin' ? 'danger' : 'primary' }}">
+                                <span class="badge bg-{{ $user->role === 'admin' ? 'danger' : ($user->role === 'hr' ? 'info' : 'primary') }}">
                                     {{ ucfirst($user->role) }}
                                 </span>
                             </td>
-                            <td>{{ $user->resumes->count() }}</td>
-                            <td>{{ $user->applications->count() }}</td>
+                            <td>{{ $user->uploaded_candidates_count ?? 0 }}</td>
                             <td>{{ $user->created_at->format('M d, Y') }}</td>
+                            <td>
+                                <a href="{{ route('admin.users.edit', $user) }}" class="btn btn-sm btn-outline-primary">Edit</a>
+                                @if($user->id !== auth()->id())
+                                    <form method="POST" action="{{ route('admin.users.destroy', $user) }}" class="d-inline"
+                                          onsubmit="return confirm('Delete this user?');">
+                                        @csrf
+                                        @method('DELETE')
+                                        <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
+                                    </form>
+                                @endif
+                            </td>
                         </tr>
                     @empty
                         <tr>
@@ -51,4 +61,3 @@
     </div>
 </div>
 @endsection
-

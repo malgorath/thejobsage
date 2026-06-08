@@ -2,8 +2,8 @@
 
 namespace Tests\Feature;
 
-use App\Models\User;
 use App\Models\Company;
+use App\Models\User;
 use Tests\TestCase;
 
 class CompanyCrudTest extends TestCase
@@ -30,7 +30,7 @@ class CompanyCrudTest extends TestCase
 
         $response->assertRedirect(route('admin.companies.index'));
         $response->assertSessionHas('success');
-        
+
         $this->assertDatabaseHas('companies', [
             'name' => 'Tech Corp',
         ]);
@@ -49,7 +49,7 @@ class CompanyCrudTest extends TestCase
 
         $response->assertRedirect(route('admin.companies.index'));
         $response->assertSessionHas('success');
-        
+
         $this->assertDatabaseHas('companies', [
             'id' => $company->id,
             'name' => 'Updated Company',
@@ -65,7 +65,7 @@ class CompanyCrudTest extends TestCase
 
         $response->assertRedirect(route('admin.companies.index'));
         $response->assertSessionHas('success');
-        
+
         $this->assertDatabaseMissing('companies', ['id' => $company->id]);
     }
 
@@ -78,4 +78,3 @@ class CompanyCrudTest extends TestCase
         $response->assertStatus(403);
     }
 }
-

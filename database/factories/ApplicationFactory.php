@@ -2,9 +2,9 @@
 
 namespace Database\Factories;
 
-use App\Models\User;
 use App\Models\Job;
 use App\Models\Resume;
+use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 class ApplicationFactory extends Factory
@@ -22,4 +22,3 @@ class ApplicationFactory extends Factory
         ];
     }
 }
-

@@ -14,11 +14,10 @@ class UserDetailFactory extends Factory
             'address' => $this->faker->address(),
             'phone' => $this->faker->phoneNumber(),
             'email' => $this->faker->email(),
-            'linkedin' => 'https://linkedin.com/in/' . $this->faker->userName(),
-            'website' => 'https://' . $this->faker->domainName(),
-            'github' => 'https://github.com/' . $this->faker->userName(),
+            'linkedin' => 'https://linkedin.com/in/'.$this->faker->userName(),
+            'website' => 'https://'.$this->faker->domainName(),
+            'github' => 'https://github.com/'.$this->faker->userName(),
             'other_contact' => $this->faker->optional()->email(),
         ];
     }
 }
-

@@ -1,96 +1,101 @@
 <?php
 
-use App\Models\Resume;
-use App\Models\User;
 use App\Services\OllamaService;
 use Illuminate\Support\Facades\Http;
 
 beforeEach(function () {
-    $this->user = User::factory()->create();
-    $this->resume = Resume::factory()->create(['user_id' => $this->user->id]);
-    $this->aiService = new OllamaService();
+    $this->aiService = app(OllamaService::class);
 });
 
-test('resume analysis returns valid response', function () {
+test('stripPii returns anonymized text on success', function () {
     Http::fake([
         config('ollama.api_url') => Http::response([
-            'response' => 'This resume shows strong technical skills in software development.',
+            'response' => 'Software Engineer at Company A with strong PHP skills.',
         ], 200),
     ]);
 
-    $resumeText = 'John Doe, Software Engineer with 5 years of experience in PHP and Laravel.';
-    $result = $this->aiService->analyzeResume($resumeText, $this->resume);
+    $raw = 'John Doe, john@acme.com, Software Engineer at Acme Corp.';
+    $result = $this->aiService->stripPii($raw);
 
     expect($result)->toBeString();
-    expect($result)->toContain('technical skills');
+    expect($result)->toContain('Company A');
 });
 
-test('skill extraction parses correctly', function () {
+test('stripPii falls back to raw text when ollama returns 500', function () {
+    Http::fake([
+        config('ollama.api_url') => Http::response([], 500),
+    ]);
+
+    $raw = 'Jane Smith, jane@example.com';
+    $result = $this->aiService->stripPii($raw);
+
+    expect($result)->toBe($raw);
+});
+
+test('stripPii falls back to raw text on malformed response', function () {
+    Http::fake([
+        config('ollama.api_url') => Http::response(['error' => 'bad model'], 200),
+    ]);
+
+    $raw = 'Jane Smith, jane@example.com';
+    $result = $this->aiService->stripPii($raw);
+
+    expect($result)->toBe($raw);
+});
+
+test('skill extraction returns array of skills', function () {
     Http::fake([
         config('ollama.api_url') => Http::response([
-            'response' => 'PHP, Laravel, JavaScript, MySQL',
+            'response' => 'PHP, Laravel, MySQL',
         ], 200),
     ]);
 
-    $resumeText = 'Experienced in PHP, Laravel, JavaScript, and MySQL.';
-    $skills = $this->aiService->extractSkills($resumeText);
+    $skills = $this->aiService->extractSkills('PHP, Laravel, MySQL developer.');
 
     expect($skills)->toBeArray();
     expect($skills)->toContain('PHP');
     expect($skills)->toContain('Laravel');
 });
 
-test('handles ollama connection timeout', function () {
-    Http::fake([
-        config('ollama.api_url') => Http::response([], 500),
-    ]);
+test('skill extraction returns empty array on connection failure', function () {
+    Http::fake(function () {
+        throw new Exception('connection refused');
+    });
 
-    $resumeText = 'Test resume content.';
-    $result = $this->aiService->analyzeResume($resumeText, $this->resume);
+    $skills = $this->aiService->extractSkills('some resume text');
 
-    expect($result)->toContain('AI analysis unavailable');
+    expect($skills)->toBeArray();
+    expect($skills)->toBeEmpty();
 });
 
-test('handles malformed ollama response', function () {
+test('generateSkillGapSummary returns gap text on success', function () {
     Http::fake([
         config('ollama.api_url') => Http::response([
-            'error' => 'Invalid response',
+            'response' => 'The candidate is missing Python and AWS experience required for the role.',
         ], 200),
     ]);
 
-    $resumeText = 'Test resume content.';
-    $result = $this->aiService->analyzeResume($resumeText, $this->resume);
-
-    expect($result)->toContain('AI analysis unavailable');
-});
-
-test('job matching returns score', function () {
-    Http::fake([
-        config('ollama.api_url') => Http::response([
-            'response' => 'Match Score: 85/100. Strong alignment with required skills.',
-        ], 200),
-    ]);
-
-    $resumeText = 'Software Engineer with PHP and Laravel experience.';
-    $jobDescription = 'Looking for a PHP Laravel developer.';
-    $result = $this->aiService->matchJob($resumeText, $jobDescription);
+    $result = $this->aiService->generateSkillGapSummary(
+        ['python', 'aws', 'php'],
+        ['php', 'laravel']
+    );
 
     expect($result)->toBeString();
-    expect($result)->toContain('Match Score');
+    expect($result)->toContain('Python');
 });
 
-test('cover letter generation works', function () {
-    Http::fake([
-        config('ollama.api_url') => Http::response([
-            'response' => 'Dear Hiring Manager, I am writing to express my interest...',
-        ], 200),
-    ]);
+test('generateSkillGapSummary returns empty string when no job skills provided', function () {
+    $result = $this->aiService->generateSkillGapSummary([], ['php', 'laravel']);
 
-    $resumeText = 'Experienced software developer.';
-    $jobDescription = 'Software Engineer position.';
-    $result = $this->aiService->generateCoverLetter($resumeText, $jobDescription, 'John Doe');
-
-    expect($result)->toBeString();
-    expect($result)->toContain('Dear');
+    expect($result)->toBe('');
 });
 
+test('generateSkillGapSummary returns empty string on connection failure', function () {
+    Http::fake(function () {
+        throw new Exception('connection refused');
+    });
+
+    $result = $this->aiService->generateSkillGapSummary(['python', 'aws'], ['php']);
+
+    expect($result)->toBe('');
+});

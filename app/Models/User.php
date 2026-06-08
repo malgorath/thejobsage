@@ -2,21 +2,23 @@
 
 namespace App\Models;
 
-// use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 
+/**
+ * Platform user with one of three roles: admin, recruiter, or hr.
+ *
+ * Admins manage users, jobs, and have full access.
+ * Recruiters upload resumes and access raw resume files.
+ * HR users view only anonymized candidate profiles — never raw files.
+ */
 class User extends Authenticatable
 {
     /** @use HasFactory<\Database\Factories\UserFactory> */
     use HasFactory, Notifiable;
 
-    /**
-     * The attributes that are mass assignable.
-     *
-     * @var list<string>
-     */
     protected $fillable = [
         'name',
         'email',
@@ -24,21 +26,11 @@ class User extends Authenticatable
         'role',
     ];
 
-    /**
-     * The attributes that should be hidden for serialization.
-     *
-     * @var list<string>
-     */
     protected $hidden = [
         'password',
         'remember_token',
     ];
 
-    /**
-     * Get the attributes that should be cast.
-     *
-     * @return array<string, string>
-     */
     protected function casts(): array
     {
         return [
@@ -48,42 +40,34 @@ class User extends Authenticatable
     }
 
     /**
-     * Get the user's resumes.
+     * Candidates uploaded by this recruiter.
      */
-    public function resumes()
+    public function uploadedCandidates(): HasMany
     {
-        return $this->hasMany(Resume::class);
-    }
-
-    // Define relationship with UserDetail
-    public function userDetail()
-    {
-        return $this->hasOne(UserDetail::class);
-    }
-
-    // Define relationship with UserSkill
-    public function userSkills()
-    {
-        return $this->hasMany(UserSkill::class);
-    }
-
-    // Define relationship with Skills Table
-    public function skills()
-    {
-        return $this->hasManyThrough(Skill::class, UserSkill::class, 'user_id', 'id', 'id', 'skill_id');
-    }
-
-    // Define relationship with Applications
-    public function applications()
-    {
-        return $this->hasMany(Application::class);
+        return $this->hasMany(Candidate::class, 'uploaded_by');
     }
 
     /**
-     * Check if the user is an admin.
+     * Whether this user has the admin role.
      */
     public function isAdmin(): bool
     {
         return $this->role === 'admin';
+    }
+
+    /**
+     * Whether this user has the recruiter role.
+     */
+    public function isRecruiter(): bool
+    {
+        return $this->role === 'recruiter';
+    }
+
+    /**
+     * Whether this user has the hr role.
+     */
+    public function isHr(): bool
+    {
+        return $this->role === 'hr';
     }
 }

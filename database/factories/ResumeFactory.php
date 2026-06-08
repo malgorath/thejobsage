@@ -24,22 +24,22 @@ class ResumeFactory extends Factory
         $jobTitle = $faker->jobTitle();
         $email = $faker->email();
         $phone = $faker->phoneNumber();
-        $location = $faker->city() . ', ' . $faker->stateAbbr();
+        $location = $faker->city().', '.$faker->stateAbbr();
 
         $resumeTextContent = "## {$name}\n";
         $resumeTextContent .= "{$jobTitle}\n";
         $resumeTextContent .= "{$email} | {$phone} | {$location}\n\n";
 
         $resumeTextContent .= "### Summary\n";
-        $resumeTextContent .= $faker->paragraphs(1, true) . "\n\n";
+        $resumeTextContent .= $faker->paragraphs(1, true)."\n\n";
 
         $resumeTextContent .= "### Experience\n";
         for ($i = 0; $i < $faker->numberBetween(2, 4); $i++) {
             $resumeTextContent .= "**{$faker->jobTitle()}** | {$faker->company()} | {$faker->year()} - {$faker->randomElement(['Present', $faker->year()])}\n";
-            $resumeTextContent .= "- " . $faker->bs() . "\n"; // Use bs for plausible responsibilities
-            $resumeTextContent .= "- " . $faker->bs() . "\n";
+            $resumeTextContent .= '- '.$faker->bs()."\n"; // Use bs for plausible responsibilities
+            $resumeTextContent .= '- '.$faker->bs()."\n";
             if ($faker->boolean(30)) { // Occasionally add a third point
-                 $resumeTextContent .= "- " . $faker->bs() . "\n";
+                $resumeTextContent .= '- '.$faker->bs()."\n";
             }
             $resumeTextContent .= "\n";
         }
@@ -52,16 +52,15 @@ class ResumeFactory extends Factory
             'PHP', 'Laravel', 'JavaScript', 'React', 'Vue.js', 'Node.js', 'Python', 'Django',
             'Java', 'Spring Boot', 'C#', '.NET', 'SQL', 'PostgreSQL', 'MySQL', 'MongoDB',
             'AWS', 'Azure', 'GCP', 'Docker', 'Kubernetes', 'Terraform', 'Git', 'CI/CD',
-            'Agile Methodologies', 'Problem Solving', 'Team Collaboration', 'Project Management'
+            'Agile Methodologies', 'Problem Solving', 'Team Collaboration', 'Project Management',
         ], $faker->numberBetween(8, 15));
-        $resumeTextContent .= implode(', ', $skills) . "\n";
+        $resumeTextContent .= implode(', ', $skills)."\n";
         // --- End of Simulated AI Content ---
-
 
         // --- Determine Filename and MimeType ---
         $fileExtension = $this->faker->randomElement(['pdf', 'docx']);
-        $baseName = Str::slug($name . ' ' . $jobTitle . ' Resume');
-        $filename = $baseName . '.' . $fileExtension;
+        $baseName = Str::slug($name.' '.$jobTitle.' Resume');
+        $filename = $baseName.'.'.$fileExtension;
         $mimeType = match ($fileExtension) {
             'pdf' => 'application/pdf',
             'docx' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',

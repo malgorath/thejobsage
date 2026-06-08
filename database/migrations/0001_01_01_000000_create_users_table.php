@@ -15,8 +15,8 @@ return new class extends Migration
             $table->id();
             $table->string('name');
             $table->string('email')->unique();
-	    $table->string('password');
-	    $table->string('role')->default('job_seeker');
+            $table->string('password');
+            $table->string('role')->default('job_seeker');
             $table->timestamps();
         });
 

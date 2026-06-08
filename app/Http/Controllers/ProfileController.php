@@ -8,35 +8,25 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Redirect;
 use Illuminate\View\View;
-use App\Models\Resume;
-use App\Models\Application;
 
+/**
+ * Handles authenticated user profile management: view, update, and account deletion.
+ */
 class ProfileController extends Controller
 {
     /**
-     * Display the user's profile form.
+     * Show the profile edit form for the authenticated user.
      */
     public function edit(Request $request): View
     {
-        return view('profile.edit', [
-            'user' => $request->user(),
-        ]);
-    }
-
-    public function dashboard(): View
-    {
-        $user = Auth::user()->load('userDetail', 'userSkills.skill');
-        $resumes = Resume::where('user_id', Auth::id())->latest()->get();
-        $applications = Application::where('user_id', Auth::id())
-            ->with('job')
-            ->latest()
-            ->get();
-
-        return view('dashboard', compact('user', 'resumes', 'applications'));
+        return view('profile.edit', ['user' => $request->user()]);
     }
 
     /**
-     * Update the user's profile information.
+     * Update the authenticated user's profile information.
+     *
+     * Clears email_verified_at when the email address changes, forcing
+     * re-verification via the standard Laravel email verification flow.
      */
     public function update(ProfileUpdateRequest $request): RedirectResponse
     {
@@ -52,7 +42,10 @@ class ProfileController extends Controller
     }
 
     /**
-     * Delete the user's account.
+     * Delete the authenticated user's account after password confirmation.
+     *
+     * Logs the user out and invalidates the session before deleting so that
+     * no post-delete requests are processed under the deleted identity.
      */
     public function destroy(Request $request): RedirectResponse
     {
@@ -61,9 +54,7 @@ class ProfileController extends Controller
         ]);
 
         $user = $request->user();
-
         Auth::logout();
-
         $user->delete();
 
         $request->session()->invalidate();

@@ -46,18 +46,16 @@ class NavbarTest extends TestCase
     }
 
     /**
-     * Test that authenticated users see additional nav items
+     * Test that authenticated users see the account settings link
      */
-    public function test_authenticated_users_see_additional_nav_items(): void
+    public function test_authenticated_users_see_profile_link(): void
     {
-        $user = User::factory()->create();
+        $user = User::factory()->create(['role' => 'recruiter']);
 
         $response = $this->actingAs($user)->get('/');
 
         $response->assertStatus(200);
-        $response->assertSee('Dashboard', false);
-        $response->assertSee('My Resumes', false);
-        $response->assertSee('Applications', false);
+        $response->assertSee('Settings', false);
     }
 
     /**
@@ -68,7 +66,7 @@ class NavbarTest extends TestCase
         $response = $this->get('/');
 
         $response->assertStatus(200);
-        $response->assertDontSee('Dashboard', false);
+        $response->assertDontSee('Profile', false);
         $response->assertDontSee('My Resumes', false);
         $response->assertDontSee('Applications', false);
     }
@@ -86,4 +84,3 @@ class NavbarTest extends TestCase
         $response->assertSee('bi-briefcase', false); // Bootstrap icon class
     }
 }
-

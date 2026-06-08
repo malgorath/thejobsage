@@ -39,4 +39,3 @@ return [
     */
     'timeout' => env('OLLAMA_TIMEOUT', 120),
 ];
-

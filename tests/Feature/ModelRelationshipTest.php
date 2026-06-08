@@ -1,52 +1,63 @@
 <?php
 
-use App\Models\User;
-use App\Models\Resume;
-use App\Models\UserDetail;
-use App\Models\UserSkill;
-use App\Models\Skill;
-use App\Models\Job;
-use App\Models\Application;
+use App\Models\Candidate;
 use App\Models\Company;
+use App\Models\Job;
+use App\Models\Resume;
+use App\Models\Skill;
+use App\Models\User;
 
-test('user has many resumes', function () {
-    $user = User::factory()->create();
-    Resume::factory()->count(3)->create(['user_id' => $user->id]);
-
-    expect($user->resumes)->toHaveCount(3);
-    expect($user->resumes->first())->toBeInstanceOf(Resume::class);
-});
-
-test('user has one user detail', function () {
-    $user = User::factory()->create();
-    UserDetail::factory()->create(['user_id' => $user->id]);
-
-    expect($user->userDetail)->toBeInstanceOf(UserDetail::class);
-});
-
-test('user has many skills through user_skills', function () {
-    $user = User::factory()->create();
-    $skill1 = Skill::factory()->create();
-    $skill2 = Skill::factory()->create();
-    
-    UserSkill::factory()->create([
-        'user_id' => $user->id,
-        'skill_id' => $skill1->id,
-    ]);
-    UserSkill::factory()->create([
-        'user_id' => $user->id,
-        'skill_id' => $skill2->id,
+test('user has many uploaded candidates', function () {
+    $recruiter = User::factory()->create(['role' => 'recruiter']);
+    $job = Job::factory()->create();
+    $resume = Resume::factory()->create(['user_id' => null, 'uploaded_by' => $recruiter->id]);
+    Candidate::factory()->count(2)->create([
+        'uploaded_by' => $recruiter->id,
+        'job_id' => $job->id,
+        'resume_id' => $resume->id,
     ]);
 
-    expect($user->userSkills)->toHaveCount(2);
+    expect($recruiter->uploadedCandidates)->toHaveCount(2);
+    expect($recruiter->uploadedCandidates->first())->toBeInstanceOf(Candidate::class);
 });
 
-test('resume belongs to user', function () {
-    $user = User::factory()->create();
-    $resume = Resume::factory()->create(['user_id' => $user->id]);
+test('candidate belongs to job', function () {
+    $job = Job::factory()->create();
+    $recruiter = User::factory()->create(['role' => 'recruiter']);
+    $resume = Resume::factory()->create(['user_id' => null, 'uploaded_by' => $recruiter->id]);
+    $candidate = Candidate::factory()->create(['job_id' => $job->id, 'uploaded_by' => $recruiter->id, 'resume_id' => $resume->id]);
 
-    expect($resume->user)->toBeInstanceOf(User::class);
-    expect($resume->user->id)->toBe($user->id);
+    expect($candidate->job)->toBeInstanceOf(Job::class);
+    expect($candidate->job->id)->toBe($job->id);
+});
+
+test('candidate belongs to uploader', function () {
+    $recruiter = User::factory()->create(['role' => 'recruiter']);
+    $job = Job::factory()->create();
+    $resume = Resume::factory()->create(['user_id' => null, 'uploaded_by' => $recruiter->id]);
+    $candidate = Candidate::factory()->create(['uploaded_by' => $recruiter->id, 'job_id' => $job->id, 'resume_id' => $resume->id]);
+
+    expect($candidate->uploader)->toBeInstanceOf(User::class);
+    expect($candidate->uploader->id)->toBe($recruiter->id);
+});
+
+test('candidate belongs to resume', function () {
+    $recruiter = User::factory()->create(['role' => 'recruiter']);
+    $job = Job::factory()->create();
+    $resume = Resume::factory()->create(['user_id' => null, 'uploaded_by' => $recruiter->id]);
+    $candidate = Candidate::factory()->create(['resume_id' => $resume->id, 'uploaded_by' => $recruiter->id, 'job_id' => $job->id]);
+
+    expect($candidate->resume)->toBeInstanceOf(Resume::class);
+    expect($candidate->resume->id)->toBe($resume->id);
+});
+
+test('job has many candidates', function () {
+    $job = Job::factory()->create();
+    $recruiter = User::factory()->create(['role' => 'recruiter']);
+    $resume = Resume::factory()->create(['user_id' => null, 'uploaded_by' => $recruiter->id]);
+    Candidate::factory()->count(3)->create(['job_id' => $job->id, 'uploaded_by' => $recruiter->id, 'resume_id' => $resume->id]);
+
+    expect($job->candidates)->toHaveCount(3);
 });
 
 test('job belongs to company', function () {
@@ -57,31 +68,63 @@ test('job belongs to company', function () {
     expect($job->companyRelation->id)->toBe($company->id);
 });
 
-test('application belongs to user and job', function () {
-    $user = User::factory()->create();
+test('candidate can be created without uploaded_by for portal submissions', function () {
     $job = Job::factory()->create();
-    $application = Application::factory()->create([
-        'user_id' => $user->id,
+    $resume = Resume::factory()->create(['user_id' => null]);
+    $token = \Illuminate\Support\Str::uuid()->toString();
+
+    $candidate = Candidate::create([
         'job_id' => $job->id,
+        'resume_id' => $resume->id,
+        'uploaded_by' => null,
+        'candidate_email' => 'portal@example.com',
+        'submission_token' => $token,
+        'status' => 'pending_analysis',
     ]);
 
-    expect($application->user)->toBeInstanceOf(User::class);
-    expect($application->user->id)->toBe($user->id);
-    expect($application->job)->toBeInstanceOf(Job::class);
-    expect($application->job->id)->toBe($job->id);
+    expect($candidate->uploaded_by)->toBeNull();
+    expect($candidate->candidate_email)->toBe('portal@example.com');
+    expect($candidate->submission_token)->toBe($token);
+    expect($candidate->uploader)->toBeNull();
 });
 
-test('job has many applications', function () {
+test('candidate stores rejection fields', function () {
     $job = Job::factory()->create();
-    Application::factory()->count(3)->create(['job_id' => $job->id]);
+    $resume = Resume::factory()->create(['user_id' => null]);
 
-    expect($job->applications)->toHaveCount(3);
+    $candidate = Candidate::create([
+        'job_id' => $job->id,
+        'resume_id' => $resume->id,
+        'uploaded_by' => null,
+        'status' => 'rejected',
+        'rejection_stage' => 'screening',
+        'rejection_reason' => 'skill_gap',
+        'rejection_note' => 'Missing required skills.',
+        'skill_gap_summary' => 'The candidate lacks Python experience.',
+    ]);
+
+    expect($candidate->rejection_stage)->toBe('screening');
+    expect($candidate->rejection_reason)->toBe('skill_gap');
+    expect($candidate->rejection_note)->toBe('Missing required skills.');
+    expect($candidate->skill_gap_summary)->toBe('The candidate lacks Python experience.');
 });
 
-test('user has many applications', function () {
-    $user = User::factory()->create();
-    Application::factory()->count(2)->create(['user_id' => $user->id]);
+test('job is_closed defaults to false and can be set', function () {
+    $job = Job::factory()->create()->fresh();
+    expect($job->is_closed)->toBeFalse();
 
-    expect($user->applications)->toHaveCount(2);
+    $job->update(['is_closed' => true, 'closed_at' => now()]);
+    $job->refresh();
+
+    expect($job->is_closed)->toBeTrue();
+    expect($job->closed_at)->not->toBeNull();
 });
 
+test('resume has many skills via pivot', function () {
+    $resume = Resume::factory()->create(['user_id' => null]);
+    $skill1 = Skill::factory()->create();
+    $skill2 = Skill::factory()->create();
+    $resume->skills()->attach([$skill1->id, $skill2->id]);
+
+    expect($resume->skills)->toHaveCount(2);
+});

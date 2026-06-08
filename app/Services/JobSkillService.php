@@ -6,14 +6,26 @@ use App\Models\Job;
 use App\Models\JobListingSkill;
 use Illuminate\Support\Str;
 
+/**
+ * Extracts required skills from a job description via Ollama and attaches
+ * them to the job's listing-skills pivot table.
+ *
+ * Skills are extracted lazily — the method is a no-op when skills already
+ * exist, so it is safe to call on every page view.
+ */
 class JobSkillService
 {
-    public function __construct(private OllamaService $ollamaService)
-    {
-    }
+    public function __construct(private OllamaService $ollamaService) {}
 
     /**
-     * Extract and attach skills for a job if none exist.
+     * Extract skills from the job description and attach them to the job.
+     *
+     * Skips silently when:
+     *  - the job already has listing skills attached
+     *  - the job description is empty
+     *  - Ollama returns an error or is unreachable
+     *
+     * @param  Job  $job  The job whose listing skills should be populated.
      */
     public function extractAndAttach(Job $job): void
     {
@@ -37,6 +49,7 @@ class JobSkillService
         } catch (\Throwable) {
             return;
         }
+
         if (! $response->successful()) {
             return;
         }
@@ -62,4 +75,3 @@ class JobSkillService
         }
     }
 }
-

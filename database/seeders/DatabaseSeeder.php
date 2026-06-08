@@ -2,29 +2,28 @@
 
 namespace Database\Seeders;
 
-use App\Models\User;
-// use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 
 class DatabaseSeeder extends Seeder
 {
     /**
      * Seed the application's database.
+     *
+     * When APP_ENV=demo the DemoSeeder is also called, which creates realistic
+     * job listings, recruiter/HR accounts, and 8 candidates per job at various
+     * pipeline stages for demonstration and testing purposes.
      */
     public function run(): void
     {
-        // User::factory(10)->create();
-
-        // User::factory()->create([
-        //     'name' => 'Test User',
-        //     'email' => 'test@example.com',
-        // ]);
         $this->call([
             PromptSeeder::class,
             SkillSeeder::class,
             UserSeeder::class,
-            UserDetailSeeder::class,
             JobSeeder::class,
         ]);
+
+        if (app()->environment('demo')) {
+            $this->call(DemoSeeder::class);
+        }
     }
 }

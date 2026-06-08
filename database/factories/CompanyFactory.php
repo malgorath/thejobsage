@@ -10,9 +10,8 @@ class CompanyFactory extends Factory
     {
         return [
             'name' => $this->faker->company(),
-            'website' => 'https://' . $this->faker->domainName(),
+            'website' => 'https://'.$this->faker->domainName(),
             'description' => $this->faker->paragraph(),
         ];
     }
 }
-

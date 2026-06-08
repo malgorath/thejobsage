@@ -1,316 +1,283 @@
-# JobSage
+# JobSage — Blind HR Screening Platform
 
-A full-featured Laravel application for managing resumes, tracking job applications, and leveraging local LLMs to provide AI-driven resume analysis, skill extraction, and job matching — all without sending data to external APIs.
-
-## Features
-
-- **Resume management** — upload, parse, and analyze PDF and DOCX resumes
-- **Job application tracking** — manage and organize your entire job search
-- **AI-powered analysis** — resume analysis, skill extraction, and job matching via local Ollama LLM
-- **RAG job matching** — combines your resume content with job descriptions for intelligent match scoring
-- **Job skill extraction** — Ollama automatically extracts and tags required skills from job descriptions on first view
-- **Job match percentage** — calculates overlap between your profile skills and each job's extracted skill tags
-- **Resume comparison modal** — compare your primary resume against a job description via AI with a single click
-- **Admin-managed prompts** — configure every LLM prompt and Ollama parameters (temperature, top_p, etc.) through the admin UI without code changes
-- **Resume loading overlay** — visual feedback while AI analysis runs in the background
-- **Graceful AI degradation** — all Ollama calls fall back gracefully when the service is unavailable
-- **Admin panel** — full dashboard for managing users, jobs, companies, skills, prompts, and applications
-- **Comprehensive test coverage** — 125+ tests across all features and services
-
-## Tech Stack
-
-| Layer | Technology |
-|---|---|
-| Framework | PHP 8.2 / Laravel |
-| Frontend | React, Vite, Bootstrap |
-| Database | MySQL |
-| Cache & Queue | Redis |
-| LLM Backend | Ollama (local) |
-| PDF Parsing | smalot/pdfparser |
-| DOCX Parsing | phpoffice/phpword |
-| Containerization | Docker / Docker Compose |
+> Eliminate hiring bias at the source. HR never sees a name.
 
 ---
 
-## AI Architecture: Document Parsing & RAG
+## The Problem
 
-This application uses a **Retrieval-Augmented Generation (RAG)** approach to analyze resumes and provide intelligent recommendations.
+### Unconscious bias in hiring
 
-### Document Parsing
+Studies consistently show that identical resumes receive fewer callbacks when the
+applicant's name signals a minority background. Screening decisions are made in
+seconds, driven by pattern-matching against the reviewer's mental model — not merit.
 
-| Format | Library | Notes |
-|---|---|---|
-| PDF | smalot/pdfparser | Extracts text from binary storage on demand |
-| DOC/DOCX | phpoffice/phpword | Iterates sections and elements for full text |
+### ATS keyword failure
 
-**PDF parsing flow:**
-```
-Upload → Binary Storage → On-Demand Parsing → Text Extraction → AI Analysis
-```
+Applicant tracking systems reject qualified candidates who describe the same skill
+with different words. A nurse with "medication administration" experience fails a
+search for "medication management." The resume never reaches a human.
 
-```php
-$parser = new Parser();
-$pdf = $parser->parseContent($binaryContent);
-$text = $pdf->getText();
-```
+### Candidate ghosting
 
-### RAG Implementation
-
-```
-┌─────────────────┐     ┌──────────────────┐     ┌─────────────────┐
-│  Resume Upload  │────▶│  Text Extraction │────▶│  Store in DB    │
-└─────────────────┘     └──────────────────┘     └─────────────────┘
-                                                          │
-                                                          ▼
-┌─────────────────┐     ┌──────────────────┐     ┌─────────────────┐
-│  AI Response    │◀────│  Ollama LLM      │◀────│  Build Prompt   │
-└─────────────────┘     └──────────────────┘     └─────────────────┘
-```
-
-**Resume analysis** — retrieves stored document, extracts text, sends to Ollama with an analysis prompt, stores result for future reference.
-
-**Skill extraction** — LLM extracts technical and professional skills from resume text, parses the response, and stores skills in the `skills` table linked via `user_skills` pivot.
-
-**Job skill extraction** — when a job listing is first viewed and has no skill tags, `JobSkillService` sends the job description to Ollama using the `job_skill_extraction` prompt, then parses the comma-separated response into `job_listing_skills` records linked to the job via a many-to-many pivot.
-
-**Job match percentage** — `JobMatchService::calculateMatch()` intersects the job's extracted skill tags with the authenticated user's profile skills and returns a 0-100 integer displayed on the jobs index page.
-
-**Job comparison** — `POST /jobs/{job}/compare-resume` retrieves the user's primary resume (`is_primary = true`), builds a RAG prompt with the resume text and job description, and returns a JSON report from Ollama:
-
-```php
-public function matchJob($resumeText, $jobDescription)
-{
-    $prompt = "Compare this resume with the job description and provide
-               a match score (0-100) along with suggestions:
-
-               Resume: $resumeText
-
-               Job Description: $jobDescription";
-
-    return $this->callOllama($prompt);
-}
-```
-
-### Admin-Managed Prompt System
-
-Every AI prompt and Ollama configuration parameter is stored in the `prompts` table and editable through the admin UI at `/admin/prompts`. If a DB entry for a given `key` is missing, a built-in fallback template is used automatically.
-
-| Prompt Key | Description |
-|---|---|
-| `resume_analysis` | Full resume analysis and feedback |
-| `skill_extraction` | Extract comma-separated skills from resume text |
-| `job_match` | Score and compare resume against a job description |
-| `cover_letter` | Generate a tailored cover letter |
-| `job_skill_extraction` | Extract required skills from a job description |
-
-**Prompt template variables** — wrap field names in `{{double_braces}}`:
-
-| Variable | Used In |
-|---|---|
-| `{{resume_text}}` | resume_analysis, skill_extraction, job_match, cover_letter |
-| `{{job_description}}` | job_match, cover_letter, job_skill_extraction |
-| `{{applicant_name}}` | cover_letter |
-
-**Per-prompt Ollama configuration** — stored as JSON in the `config` column and merged over the service defaults at call time:
-
-```json
-{
-  "temperature": 0.3,
-  "top_p": 0.9,
-  "top_k": 40,
-  "num_ctx": 4096,
-  "max_tokens": 512
-}
-```
-
-### Configuring the AI Backend
-
-```env
-# .env
-OLLAMA_API_URL=http://localhost:11434/api/generate
-OLLAMA_LLM_MODEL=gemma3:4b
-
-# Docker environments
-# OLLAMA_API_URL=http://host.docker.internal:11434/api/generate
-```
-
-**Recommended models:**
-
-| Model | Size | Best For |
-|---|---|---|
-| `gemma3:4b` | 4B | Fast, lightweight analysis |
-| `llama3.2` | 3B | Good balance of speed/quality |
-| `mistral` | 7B | Higher quality analysis |
-| `llama3.1:8b` | 8B | Best quality, slower |
-
-All Ollama calls are wrapped in try/catch — when Ollama is unavailable the application degrades gracefully (stores a fallback message or silently skips extraction) rather than surfacing an unhandled exception to the user.
+Most applicants receive no feedback. No rejection email, no reason, no skill gap
+explanation. Candidates waste months reapplying without knowing what to fix.
 
 ---
 
-## Installation
+## The Solution
 
-### Option 1: Docker (Recommended)
+JobSage is a **blind HR screening platform** built for small-to-mid-sized hiring
+teams. Every resume that enters the system is immediately stripped of all PII
+by a local LLM before any human reviewer sees it.
 
-**Prerequisites:** Docker 20.10+, Docker Compose 2.0+
+HR sees:
+- An anonymized skill-based candidate summary
+- A 0–100 skill match score against the job's requirements
+- Extracted skill chips, ranked by relevance
+
+HR does **not** see:
+- Names, email addresses, phone numbers
+- School names, graduation years
+- Employer names, location details
+- Any field that correlates with protected characteristics
+
+Recruiters retain access to the original resume file for extending offers to
+shortlisted candidates — but only after the blind screening decision has been made.
+
+---
+
+## Compliance
+
+### EEOC (US Equal Employment Opportunity Commission)
+Blind screening directly addresses the EEOC's guidance on reducing disparate
+treatment in hiring. By removing race- and gender-correlated identifiers before
+any scoring or shortlisting decision, the platform supports defensible,
+criteria-based selection.
+
+### GDPR (EU General Data Protection Regulation)
+- Candidate PII is stripped at ingest — the minimal data principle
+- Rejection notes authored by HR users are passed through the PII stripper
+  before being stored or emailed, preventing accidental re-identification
+- Candidates can track their status via a tokenized link without creating an account
+- No tracking cookies or third-party analytics on the candidate portal
+
+---
+
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                        Docker Compose                        │
+│                                                              │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────────┐  │
+│  │  jobsage-app │  │ jobsage-nginx │  │  jobsage-db      │  │
+│  │  Laravel 12  │  │  Nginx 1.25  │  │  MySQL 8.0       │  │
+│  │  PHP 8.2     │  │              │  │                  │  │
+│  └──────┬───────┘  └──────────────┘  └──────────────────┘  │
+│         │                                                    │
+│  ┌──────┴───────┐  ┌──────────────────────────────────────┐ │
+│  │ jobsage-queue│  │  jobsage-redis                       │ │
+│  │ queue:work   │  │  Sessions · Cache · Queue            │ │
+│  └──────────────┘  └──────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                    ┌─────────▼─────────┐
+                    │  Ollama (host)     │
+                    │  llama3.2 / etc.  │
+                    │  Port 11434       │
+                    └───────────────────┘
+```
+
+**Key services:**
+
+| Service | Purpose |
+|---|---|
+| `jobsage-app` | PHP-FPM application container |
+| `jobsage-nginx` | Reverse proxy, serves static assets |
+| `jobsage-db` | MySQL 8 — all persistent data |
+| `jobsage-redis` | Sessions, cache, and the queue backend |
+| `jobsage-queue` | Dedicated `queue:work` worker for mail |
+| Ollama (host) | Local LLM — PII stripping, skill extraction, summaries |
+
+**Pipeline flow (per candidate upload):**
+
+1. Resume binary stored in MySQL BLOB (`resumes.file_data`)
+2. `ResumeTextExtractor` parses PDF/DOCX to plain text
+3. `OllamaService::stripPii()` removes all identifiers → anonymized text
+4. `OllamaService::extractSkills()` extracts skill keywords
+5. Skills attached to `resume_skill` pivot
+6. Skill-overlap match score calculated (0–100)
+7. `OllamaService` generates 3-5 sentence anonymized summary
+8. `Candidate` record updated: `status = analyzed`
+9. HR can now see the candidate — no PII was persisted
+
+---
+
+## Roles
+
+| Role | Access |
+|---|---|
+| **admin** | Full platform access — users, jobs, prompts, candidates, skills |
+| **recruiter** | Upload resumes, download originals, close positions, manage pipeline |
+| **hr** | View anonymized candidates only — no names, no raw files, no downloads |
+
+Middleware aliases are defined in `bootstrap/app.php`. HR users are
+**architecturally prevented** from accessing the recruiter download endpoint —
+the `recruiter` middleware blocks any other role.
+
+---
+
+## Local Setup
+
+### Prerequisites
+
+- Docker + Docker Compose
+- [Ollama](https://ollama.ai) running on the host machine with a model pulled:
+  ```bash
+  ollama pull llama3.2
+  ```
+
+### Start the stack
 
 ```bash
-git clone <repository-url>
-cd jobsage
+# Clone and enter the project
+git clone <repo-url> thejobsage
+cd thejobsage
+
+# Copy environment files
 cp docker.env.example .env
-docker compose build
+
+# Generate app key
+docker compose run --rm jobsage-app php artisan key:generate
+
+# Build and start all containers
 docker compose up -d
-docker compose exec app php artisan key:generate
-docker compose exec app php artisan migrate
+
+# Run migrations
+docker compose exec jobsage-app php artisan migrate
+
+# Seed base data (prompts, skills, admin user)
+docker compose exec jobsage-app php artisan db:seed
+
+# Optional: seed a full demo dataset
+docker compose exec jobsage-app php artisan db:seed --class=DemoSeeder
 ```
 
-Open `http://localhost:7500`.
+The application is available at **http://localhost:7500**.
 
-**Make commands:**
+### Default admin credentials (from UserSeeder)
 
-```bash
-make setup        # Full initial setup
-make up           # Start containers
-make down         # Stop containers
-make logs         # View logs
-make shell        # Open shell in app container
-make fresh        # Fresh database with seeders
-make test         # Run test suite
-make artisan cmd="migrate"
-make composer cmd="require package/name"
-make npm cmd="run dev"
-```
+Check `database/seeders/UserSeeder.php` for the seeded admin email/password.
 
-**Docker services:**
+### Demo mode (full dataset)
 
-| Service | Port | Description |
+Set `APP_ENV=demo` in your `.env` and run `php artisan db:seed` to also execute
+`DemoSeeder`, which creates 3 realistic job listings with 8 candidates each at
+various pipeline stages.
+
+---
+
+## Environment Variables Reference
+
+### Core Application
+
+| Variable | Default | Description |
 |---|---|---|
-| app (PHP-FPM) | 9000 | Application |
-| nginx | 7500 | Web server |
-| db (MySQL) | 3306 | Database |
-| redis | 6379 | Cache & queue |
-| queue | — | Queue worker |
+| `APP_NAME` | `JobSage` | Application display name |
+| `APP_ENV` | `local` | Set to `demo` to enable DemoSeeder |
+| `APP_KEY` | — | Generate with `php artisan key:generate` |
+| `APP_DEBUG` | `true` | Set `false` in production |
+| `APP_URL` | `http://localhost:7500` | Public URL |
 
-### Option 2: Traditional PHP
+### Database
 
-**Prerequisites:** PHP 8.2+, Composer, Node.js, MySQL
+| Variable | Default | Description |
+|---|---|---|
+| `DB_CONNECTION` | `mysql` | |
+| `DB_HOST` | `db` | Docker service name |
+| `DB_DATABASE` | `resume_builder` | |
+| `DB_USERNAME` | `laravel` | |
+| `DB_PASSWORD` | `secret` | |
 
-```bash
-git clone <repository-url>
-cd jobsage
-composer install
-npm install
-cp .env.example .env
-php artisan key:generate
-# Configure DB credentials in .env
-php artisan migrate
-npm run build
-php artisan serve
-```
+### Queue
+
+| Variable | Default | Description |
+|---|---|---|
+| `QUEUE_CONNECTION` | `redis` | All notification mails are queued |
+| `QUEUE_RETRY_AFTER` | `90` | Seconds before a stuck job is retried |
+
+### Mail
+
+| Variable | Default | Description |
+|---|---|---|
+| `MAIL_MAILER` | `log` | Use `smtp` for real delivery |
+| `MAIL_HOST` | `127.0.0.1` | SMTP server (e.g. Mailtrap sandbox) |
+| `MAIL_PORT` | `2525` | Mailtrap sandbox port |
+| `MAIL_FROM_ADDRESS` | `noreply@jobsage.example.com` | Sender address |
+| `MAIL_FROM_NAME` | `${APP_NAME}` | Sender display name |
+
+### Ollama
+
+| Variable | Default | Description |
+|---|---|---|
+| `OLLAMA_API_URL` | `http://host.docker.internal:11434/api/generate` | Ollama API endpoint |
+| `OLLAMA_LLM_MODEL` | `llama3.2` | Model name (must be pulled in Ollama) |
+| `OLLAMA_TIMEOUT` | `120` | HTTP timeout in seconds |
 
 ---
 
-## Admin Panel
+## Candidate Portal
 
-Access at `/admin/dashboard` (admin role required).
+The self-submission portal is publicly accessible — no account required.
 
-**Capabilities:**
-- **User management** — view all users, roles, and activity stats; edit or remove accounts (self-deletion protected)
-- **Job management** — full CRUD on job listings (admin-only posting)
-- **Company management** — full CRUD on company records
-- **Skill management** — full CRUD on the global skills catalog
-- **Application management** — view all applications and statuses
-- **LLM prompt management** — configure prompts and Ollama parameters per-task at `/admin/prompts`
+- `GET /jobs` — browse open positions
+- `GET /jobs/{job}/apply` — application form (redirects if position is closed)
+- `POST /jobs/{job}/apply` — submit resume + email address
+- `GET /portal/submitted` — confirmation page
+- `GET /submissions/{token}` — check application status by token (emailed on submit)
 
-Routes are protected by `EnsureUserIsAdmin` middleware — non-admin access returns 403.
+Rate-limited to 20 requests/minute per IP.
 
 ---
 
-## Database Seeding
+## Notification Emails
 
-```bash
-# Docker
-docker compose exec app php artisan db:seed
+Three queued mailables fire automatically:
 
-# Fresh seed
-docker compose exec app php artisan migrate:fresh --seed
-```
+| Mailable | Trigger | Recipient |
+|---|---|---|
+| `CandidateConfirmationMail` | Candidate submits via portal | Candidate |
+| `CandidateRejectedMail` | HR completes rejection form | Candidate (if email on file) |
+| `PositionFilledMail` | Recruiter marks position filled | All active (non-rejected) candidates with email |
 
-**Seeded data:**
+Rejection notes are passed through `OllamaService::stripPii()` before being stored
+or included in any email. The skill gap summary is LLM-generated and contains
+no PII by construction.
 
-| Seeder | Contents |
+---
+
+## Editing AI Prompts
+
+All LLM prompt templates are editable at runtime via **Admin → Prompts**. No
+code deployment required. Key prompt records:
+
+| Key | Purpose |
 |---|---|
-| UserSeeder | Admin + test users |
-| JobSeeder | 15 realistic job listings across 5 companies |
-| SkillSeeder | Technical and professional skills (truncates user_skills first) |
-| PromptSeeder | Baseline LLM prompts and Ollama configs for all 5 prompt keys |
-
-Default credentials (change after first login):
-- Admin: `admin@example.com` / `admin123`
-- Test user: `test@home.net` / `password`
+| `pii_strip` | Resume anonymization (EEOC compliance) |
+| `candidate_summary` | 3-5 sentence anonymized profile summary |
+| `skill_gap_summary` | Candidate-facing rejection explanation |
+| `job_skill_extraction` | Extract required skills from job description |
+| `skill_extraction` | Extract skills from anonymized resume text |
 
 ---
 
-## Testing
+## Screenshots
 
-```bash
-# Docker
-docker compose exec app php artisan test
-
-# Local
-php artisan test
-
-# Specific test
-php artisan test --filter ResumeTest
-
-# With coverage (requires Xdebug)
-php artisan test --coverage
-```
-
-**125+ tests** covering:
-
-| Suite | File(s) | Focus |
-|---|---|---|
-| Authentication | `Auth/AuthenticationTest`, `Auth/RegistrationTest`, `Auth/AuthUITest`, `Auth/PasswordResetTest`, `Auth/PasswordConfirmationTest`, `Auth/EmailVerificationTest`, `Auth/PasswordUpdateTest` | Login, register, password flows, UI |
-| Password change | `PasswordChangeTest` | Current-password confirmation, update |
-| Resume | `ResumeTest`, `ResumeOverlayTest` | Upload, parse, AI analysis, loading overlay |
-| Admin panel | `AdminTest` | Dashboard, auth, job/app management |
-| Admin CRUD | `CompanyCrudTest`, `SkillCrudTest`, `JobCrudTest`, `UserManagementTest` | Full CRUD + self-delete protection |
-| Job applications | `JobApplicationTest` | Apply, status updates |
-| Profile & skills | `ProfileTest`, `ProfileSkillsTest` | Edit, skill add/remove |
-| AI services | `AiServiceTest` | Mocked Ollama responses |
-| Ollama service (unit) | `OllamaServiceTest` | Fallback on connection failure, DB prompt + config injection |
-| Job skill extraction | `JobSkillExtractionTest` | Extract on create, lazy-extract on first view, display on detail page |
-| Job match display | `JobMatchDisplayTest` | Match percent calculation and display on jobs index |
-| Resume comparison | `JobCompareResumeTest` | Primary resume selection, AI report returned as JSON |
-| Prompt management | `PromptAdminTest`, `PromptSeederTest` | Admin CRUD, non-admin blocked, seeder baseline |
-| Skill seeder | `SkillSeederTest` | Truncate user_skills, re-seed without FK errors |
-| Navbar | `NavbarTest` | Link presence for all roles |
-| Model relationships | `ModelRelationshipTest` | Eloquent relation integrity |
-
----
-
-## Data Models
-
-| Model | Key Relations | Notes |
-|---|---|---|
-| `User` | hasMany Resume, UserSkill, Application | `role` column: `user` / `admin` |
-| `Resume` | belongsTo User | `is_primary` flag; binary PDF/DOCX storage |
-| `Job` | belongsToMany JobListingSkill | Skill pivot: `job_job_listing_skill` |
-| `JobListingSkill` | belongsToMany Job | Extracted from description by Ollama |
-| `Skill` | belongsToMany User (via UserSkill) | Global catalog; seeded by `SkillSeeder` |
-| `Application` | belongsTo User, Job | Status tracking |
-| `Company` | hasMany Job | Admin-managed |
-| `Prompt` | — | `key`, `body`, `config` (JSON Ollama overrides) |
-
----
-
-## Roadmap
-
-- **Vector database** — migrate to pgvector/ChromaDB for semantic search across large job sets
-- **LinkedIn integration** — one-click profile import and sync
+_Screenshots will be added here._
 
 ---
 
 ## License
 
-MIT
+MIT License. See [LICENSE](LICENSE) for details.

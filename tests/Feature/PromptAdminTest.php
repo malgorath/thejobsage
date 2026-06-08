@@ -49,4 +49,3 @@ test('non admin cannot access prompt admin', function () {
 
     $this->get(route('admin.prompts.index'))->assertForbidden();
 });
-

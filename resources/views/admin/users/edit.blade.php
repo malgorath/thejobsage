@@ -29,7 +29,8 @@
             <div class="mb-3">
                 <label for="role" class="form-label">Role</label>
                 <select class="form-control @error('role') is-invalid @enderror" id="role" name="role" required>
-                    <option value="job_seeker" {{ old('role', $user->role) === 'job_seeker' ? 'selected' : '' }}>Job Seeker</option>
+                    <option value="recruiter" {{ old('role', $user->role) === 'recruiter' ? 'selected' : '' }}>Recruiter</option>
+                    <option value="hr" {{ old('role', $user->role) === 'hr' ? 'selected' : '' }}>HR Reviewer</option>
                     <option value="admin" {{ old('role', $user->role) === 'admin' ? 'selected' : '' }}>Admin</option>
                 </select>
                 @error('role')

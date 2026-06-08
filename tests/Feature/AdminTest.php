@@ -2,9 +2,8 @@
 
 namespace Tests\Feature;
 
-use App\Models\User;
 use App\Models\Job;
-use App\Models\Application;
+use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
 use Tests\TestCase;
@@ -14,12 +13,13 @@ class AdminTest extends TestCase
     use RefreshDatabase;
 
     protected $adminUser;
+
     protected $regularUser;
 
     protected function setUp(): void
     {
         parent::setUp();
-        
+
         $this->adminUser = User::factory()->create([
             'email' => 'admin@test.com',
             'password' => Hash::make('password'),
@@ -29,7 +29,7 @@ class AdminTest extends TestCase
         $this->regularUser = User::factory()->create([
             'email' => 'user@test.com',
             'password' => Hash::make('password'),
-            'role' => 'job_seeker',
+            'role' => 'recruiter',
         ]);
     }
 
@@ -85,16 +85,12 @@ class AdminTest extends TestCase
         $response->assertSee($job->title);
     }
 
-    public function test_admin_can_view_all_applications(): void
+    public function test_admin_can_view_all_candidates(): void
     {
-        $application = Application::factory()->create([
-            'user_id' => $this->regularUser->id,
-        ]);
-
-        $response = $this->actingAs($this->adminUser)->get(route('admin.applications.index'));
+        $response = $this->actingAs($this->adminUser)->get(route('admin.candidates.index'));
 
         $response->assertStatus(200);
-        $response->assertSee('Application Management');
+        $response->assertSee('Candidate');
     }
 
     public function test_admin_can_create_job(): void
@@ -240,7 +236,7 @@ class AdminTest extends TestCase
 
     public function test_navbar_shows_admin_panel_link_for_admin(): void
     {
-        $response = $this->actingAs($this->adminUser)->get(route('dashboard'));
+        $response = $this->actingAs($this->adminUser)->get(route('jobs.index'));
 
         $response->assertStatus(200);
         $response->assertSee('Admin Panel');
@@ -248,7 +244,7 @@ class AdminTest extends TestCase
 
     public function test_navbar_does_not_show_admin_panel_for_regular_user(): void
     {
-        $response = $this->actingAs($this->regularUser)->get(route('dashboard'));
+        $response = $this->actingAs($this->regularUser)->get(route('jobs.index'));
 
         $response->assertStatus(200);
         $response->assertDontSee('Admin Panel');
@@ -260,4 +256,3 @@ class AdminTest extends TestCase
         $this->assertFalse($this->regularUser->isAdmin());
     }
 }
-

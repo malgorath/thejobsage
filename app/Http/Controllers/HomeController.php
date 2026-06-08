@@ -2,11 +2,17 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
+use Illuminate\View\View;
 
+/**
+ * Serves the public landing page.
+ */
 class HomeController extends Controller
 {
-    public function index()
+    /**
+     * Render the marketing / landing page.
+     */
+    public function index(): View
     {
         return view('index');
     }

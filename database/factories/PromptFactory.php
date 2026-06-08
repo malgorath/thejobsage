@@ -15,11 +15,11 @@ class PromptFactory extends Factory
 
     public function definition(): array
     {
-        $key = 'prompt_' . Str::random(6);
+        $key = 'prompt_'.Str::random(6);
 
         return [
             'key' => $key,
-            'title' => 'Prompt ' . $this->faker->words(2, true),
+            'title' => 'Prompt '.$this->faker->words(2, true),
             'body' => $this->faker->sentence(12),
             'config' => [
                 'temperature' => 0.7,
@@ -30,4 +30,3 @@ class PromptFactory extends Factory
         ];
     }
 }
-

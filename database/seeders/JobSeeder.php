@@ -2,8 +2,8 @@
 
 namespace Database\Seeders;
 
-use App\Models\Job;
 use App\Models\Company;
+use App\Models\Job;
 use Illuminate\Database\Seeder;
 
 class JobSeeder extends Seeder
@@ -276,6 +276,6 @@ class JobSeeder extends Seeder
             );
         }
 
-        $this->command->info('Seeded ' . count($jobs) . ' job listings.');
+        $this->command->info('Seeded '.count($jobs).' job listings.');
     }
 }

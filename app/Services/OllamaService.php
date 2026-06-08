@@ -1,17 +1,27 @@
 <?php
+
 namespace App\Services;
 
 use App\Models\Prompt;
-use App\Models\Resume;
-use App\Models\Skill;
-use App\Models\UserSkill;
+use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
+/**
+ * Gateway to the local Ollama LLM API.
+ *
+ * All AI operations on the platform route through this service:
+ * PII stripping, skill extraction, skill gap summaries, and prompt rendering.
+ * Prompt templates are resolved from the `prompts` database table at runtime,
+ * falling back to hardcoded defaults when no record exists for a given key.
+ * Connection details are read from config/ollama.php (env: OLLAMA_API_URL, etc.).
+ */
 class OllamaService
 {
     protected static $baseUrl;
+
     protected static $llm_model;
+
     protected array $defaultConfig = [
         'temperature' => 0.7,
         'top_p' => 0.9,
@@ -28,143 +38,143 @@ class OllamaService
         self::$llm_model = config('ollama.llm_model');
     }
 
-    // Analyze resume with Ollama AI
-    public function analyzeResume($resumeText, $resume)
+    /**
+     * Strip all PII and indirect identifiers from raw resume text.
+     *
+     * Falls back to returning the original `$text` unchanged on Ollama failure
+     * so the pipeline can continue without crashing (PII may be present, but
+     * the candidate still enters the queue for manual review).
+     *
+     * @param  string  $text  Raw extracted resume text.
+     * @return string Anonymized text, or original on failure.
+     */
+    public function stripPii(string $text): string
     {
-        $fallback = 'AI analysis unavailable. Please try again later.';
-
         [$prompt, $config] = $this->promptPayload(
-            'resume_analysis',
-            ['resume_text' => $resumeText],
-            "Analyze this resume:\n\n{{resume_text}}"
+            'pii_strip',
+            ['resume_text' => $text],
+            $this->piiStripFallbackTemplate()
         );
 
         try {
             $response = $this->postToOllama($prompt, $config);
         } catch (\Throwable $e) {
-            Log::error("AI analysis request failed for resume {$resume->id}: {$e->getMessage()}");
-            $resume->ai_analysis = $fallback;
-            $resume->save();
-            return $fallback;
+            Log::error("PII stripping request failed: {$e->getMessage()}");
+
+            return $text;
         }
 
         if (! $response->successful()) {
-            Log::error("AI analysis HTTP error for resume {$resume->id}: status {$response->status()}");
-            $resume->ai_analysis = $fallback;
-            $resume->save();
-            return $fallback;
+            Log::error("PII stripping HTTP error: status {$response->status()}");
+
+            return $text;
         }
-        
-        $analysis = $response->json()['response'] ?? $fallback;
-        $skills = $this->extractSkills($resumeText); // Extract skills from the resume text
-        Log::info($skills); // Log the skills 
 
-        // Lets Check if the skills are in the Skills table
-        $allSkillNames = Skill::pluck('name')->toArray(); // Get all skill names as array
-        foreach ($skills as $skill) {
-            $skill = trim($skill); // Clean up whitespace
-            // See if $skill is in the allSkills array and add missing skills to the Skill table
-            if (!empty($skill) && !in_array($skill, $allSkillNames)) {
-                $newSkill = new Skill();
-                $newSkill->name = $skill;
-                $newSkill->save();
+        $result = $response->json()['response'] ?? '';
 
-                // Track this skill so we don't try to add it again in this loop
-                $allSkillNames[] = $skill;
-
-                // Add the new skill to the UserSkill table if it doesn't already exist
-                if (!UserSkill::where('skill_id', $newSkill->id)->where('user_id', $resume->user_id)->exists()) {
-                    $newUserSkill = new UserSkill();
-                    $newUserSkill->user_id = $resume->user_id;
-                    $newUserSkill->skill_id = $newSkill->id;
-                    $newUserSkill->save();
-                }
-            }
-        }         
-
-        // Store the AI analysis with the resume
-        $resume->ai_analysis = $analysis; // Store the analysis in the database
-        $resume->save(); // Save the resume with the analysis
-
-        return $analysis; // Return the AI analysis for frontend display
+        return $result !== '' ? $result : $text;
     }
 
-    // Extract skills from resume text
-    public function extractSkills($text)
+    /**
+     * Extract technical and professional skill keywords from anonymized resume text.
+     *
+     * Returns a flat array of trimmed skill name strings. Returns an empty array
+     * on Ollama failure so callers degrade gracefully (no skills = score of null).
+     *
+     * @param  string  $text  Anonymized resume text.
+     * @return string[] Skill names extracted from the text.
+     */
+    public function extractSkills(string $text): array
     {
-        // Initialize static properties if not already set
-        if (!isset(self::$baseUrl)) {
+        if (! isset(self::$baseUrl)) {
             self::$baseUrl = config('ollama.api_url');
         }
-        if (!isset(self::$llm_model)) {
+        if (! isset(self::$llm_model)) {
             self::$llm_model = config('ollama.llm_model');
         }
 
         [$prompt, $config] = $this->promptPayload(
             'skill_extraction',
             ['resume_text' => $text],
-            "Extract technical and professional skill words from the following resume text and return as comma seperated array only, trimming off extra white spaces as needed, only the data no extra characters or text: \n\n{{resume_text}}"
+            "Extract technical and professional skill words from the following resume text and return as comma separated array only, trimming off extra white spaces as needed, only the data no extra characters or text: \n\n{{resume_text}}"
         );
 
         try {
-            // Prepare the API request payload
             $response = $this->postToOllama($prompt, $config);
         } catch (\Throwable $e) {
             Log::error("Skill extraction request failed: {$e->getMessage()}");
+
             return [];
         }
 
-        // Decode response
         if ($response->successful()) {
             $data = $response->json();
             if (isset($data['response'])) {
-                $skills = explode(",", $data['response']);
-                return array_map('trim', $skills);
+                return array_map('trim', explode(',', $data['response']));
             }
-            return [];
         }
 
         return [];
     }
 
-    public function matchJob($resumeText, $jobDescription)
-    {
-        [$prompt, $config] = $this->promptPayload(
-            'job_match',
-            [
-                'resume_text' => $resumeText,
-                'job_description' => $jobDescription,
-            ],
-            "Compare this resume with the job description and provide a match score (0-100) along with suggestions:\n\nResume:\n{{resume_text}}\n\nJob Description:\n{{job_description}}"
-        );
-
-        $response = $this->postToOllama($prompt, $config);
-
-        return $response->json()['response'] ?? 'Error matching resume to job.';
-    }
-
     /**
-     * Generate a cover letter based on resume and job description
+     * Generate a concise skill gap explanation for a rejected candidate.
+     *
+     * Returns an empty string when `$jobSkillNames` is empty (no job skills =
+     * no meaningful gap to explain) or on Ollama failure. Callers should treat
+     * an empty string as "omit this section" rather than an error.
+     *
+     * @param  string[]  $jobSkillNames  Required skills for the position.
+     * @param  string[]  $candidateSkillNames  Skills found in the candidate's resume.
+     * @return string Prose gap explanation, or '' on failure / no job skills.
      */
-    public function generateCoverLetter($resumeText, $jobDescription, $userName = 'Applicant')
+    public function generateSkillGapSummary(array $jobSkillNames, array $candidateSkillNames): string
     {
+        if (empty($jobSkillNames)) {
+            return '';
+        }
+
+        $jobSkillsStr = implode(', ', $jobSkillNames);
+        $candidateSkillsStr = implode(', ', $candidateSkillNames) ?: 'none identified';
+
         [$prompt, $config] = $this->promptPayload(
-            'cover_letter',
+            'skill_gap_summary',
             [
-                'resume_text' => $resumeText,
-                'job_description' => $jobDescription,
-                'applicant_name' => $userName,
+                'job_skills' => $jobSkillsStr,
+                'candidate_skills' => $candidateSkillsStr,
             ],
-            "Write a professional cover letter for the following job application. Use the resume information provided to tailor the cover letter.\n\nApplicant Name: {{applicant_name}}\n\nResume Summary:\n{{resume_text}}\n\nJob Description:\n{{job_description}}\n\nWrite a compelling cover letter that highlights relevant experience and skills from the resume that match the job requirements."
+            <<<'PROMPT'
+Given a position requiring these skills: {{job_skills}}
+And a candidate whose profile includes: {{candidate_skills}}
+
+Write a concise 2-3 sentence professional explanation of the key skill gaps.
+Focus on what is missing or underdeveloped relative to the role requirements.
+Do not mention names, companies, dates, or any identifying information.
+Write in language appropriate to share directly with the candidate.
+PROMPT
         );
 
-        $response = $this->postToOllama($prompt, $config);
+        try {
+            $response = $this->postToOllama($prompt, $config);
+        } catch (\Throwable $e) {
+            Log::error("Skill gap summary generation failed: {$e->getMessage()}");
 
-        return $response->json()['response'] ?? 'Error generating cover letter.';
+            return '';
+        }
+
+        return $response->json()['response'] ?? '';
     }
 
     /**
-     * Build prompt text and config from DB or fallback template.
+     * Resolve a prompt template from the database and render it with variables.
+     *
+     * When no DB record exists for `$key`, `$fallbackTemplate` is used verbatim.
+     * The returned config merges the service defaults with any per-prompt overrides.
+     *
+     * @param  string  $key  The prompt key (e.g. 'pii_strip').
+     * @param  array<string,string>  $variables  Placeholder values for template rendering.
+     * @param  string  $fallbackTemplate  Template used when no DB record exists.
+     * @return array{0: string, 1: array} [rendered prompt string, config array]
      */
     public function promptPayload(string $key, array $variables, string $fallbackTemplate): array
     {
@@ -175,16 +185,15 @@ class OllamaService
         return [$this->renderTemplate($template, $variables), $config];
     }
 
-    private function renderTemplate(string $template, array $variables): string
-    {
-        foreach ($variables as $key => $value) {
-            $template = str_replace('{{' . $key . '}}', $value, $template);
-        }
-
-        return $template;
-    }
-
-    public function postToOllama(string $prompt, array $config)
+    /**
+     * Post a prompt to the Ollama REST API and return the raw HTTP response.
+     *
+     * @param  string  $prompt  The fully rendered prompt string.
+     * @param  array  $config  Model parameters (temperature, top_p, etc.).
+     *
+     * @throws \Illuminate\Http\Client\ConnectionException When Ollama is unreachable.
+     */
+    public function postToOllama(string $prompt, array $config): Response
     {
         $payload = array_merge([
             'model' => self::$llm_model,
@@ -195,8 +204,64 @@ class OllamaService
         return Http::timeout(config('ollama.timeout', 120))->post(self::$baseUrl, $payload);
     }
 
+    /**
+     * Replace `{{key}}` placeholders in a template string with provided values.
+     *
+     * @param  array<string,string>  $variables
+     */
+    private function renderTemplate(string $template, array $variables): string
+    {
+        foreach ($variables as $key => $value) {
+            $template = str_replace('{{'.$key.'}}', $value, $template);
+        }
+
+        return $template;
+    }
+
+    /**
+     * Remove null values from a config array before sending to Ollama.
+     *
+     * Ollama rejects null-valued parameters, so they must be stripped rather
+     * than serialized as JSON null.
+     */
     private function filterConfig(array $config): array
     {
-        return array_filter($config, fn ($value) => !is_null($value));
+        return array_filter($config, fn ($value) => ! is_null($value));
+    }
+
+    /**
+     * Hardcoded fallback PII stripping template used when no `pii_strip` prompt
+     * record exists in the database.
+     */
+    private function piiStripFallbackTemplate(): string
+    {
+        return <<<'PROMPT'
+You are a data anonymization assistant for a blind HR screening platform. Strip ALL personally identifiable information and indirect identifiers from the resume text below.
+
+Remove or replace:
+- Full names, first names, last names — omit entirely
+- Email addresses, phone numbers — omit entirely
+- Physical addresses (street, city, state, zip/postal code) — omit entirely
+- LinkedIn, GitHub, portfolio, personal website, or any personal URLs — omit entirely
+- University, college, or school names — replace with "University" or "Institution"
+- Graduation years and specific calendar dates — omit entirely; replace with relative phrasing where needed (e.g. "approximately 3 years of experience")
+- Any "X years of experience" statements that could imply birth year or current age — rephrase to describe skill level only (e.g. "experienced in" or "proficient in")
+- Employer or company names — replace with "Company A", "Company B", etc. ordered oldest to newest
+- Military discharge dates, service branch names that imply specific dates — omit dates; keep branch name only if relevant to skills
+- Fraternity, sorority, or alumni association memberships — omit entirely
+- Religious organization memberships that could imply protected characteristics — omit entirely
+- Any other information that could directly or indirectly reveal age, race, gender, national origin, religion, or disability status
+
+Preserve:
+- Job titles and role descriptions
+- Technical skills, tools, frameworks, languages
+- Responsibilities and accomplishments (without employer names or identifying metrics tied to named entities)
+- Relative durations of roles (e.g. "2 years", "18 months")
+
+Return ONLY the anonymized text. No preamble, no explanation, no commentary.
+
+Resume:
+{{resume_text}}
+PROMPT;
     }
 }

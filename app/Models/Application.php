@@ -6,6 +6,13 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
+/**
+ * Legacy job-seeker application record.
+ *
+ * Retained for database FK integrity. The public-facing application flow was
+ * replaced by the Candidate model and the blind screening pipeline. No routes
+ * or controllers create new Application records.
+ */
 class Application extends Model
 {
     use HasFactory;
@@ -23,7 +30,7 @@ class Application extends Model
     ];
 
     /**
-     * Get the user that owns the application.
+     * The user who submitted this application.
      */
     public function user(): BelongsTo
     {
@@ -31,7 +38,7 @@ class Application extends Model
     }
 
     /**
-     * Get the job for the application.
+     * The job this application is for.
      */
     public function job(): BelongsTo
     {
@@ -39,7 +46,7 @@ class Application extends Model
     }
 
     /**
-     * Get the resume used for the application.
+     * The resume submitted with this application.
      */
     public function resume(): BelongsTo
     {

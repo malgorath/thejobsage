@@ -7,9 +7,6 @@ use Illuminate\Database\Seeder;
 
 class PromptSeeder extends Seeder
 {
-    /**
-     * Seed the prompts table with baseline prompts and Ollama configs.
-     */
     public function run(): void
     {
         $defaultConfig = [
@@ -24,53 +21,76 @@ class PromptSeeder extends Seeder
 
         $prompts = [
             [
-                'key' => 'resume_analysis',
-                'title' => 'Resume Analysis',
-                'body' => "Analyze this resume:\n\n{{resume_text}}",
-                'config' => $defaultConfig,
-            ],
-            [
                 'key' => 'skill_extraction',
                 'title' => 'Skill Extraction',
                 'body' => "Extract technical and professional skill words from the following resume text and return as a comma separated array only, trimming off extra white spaces as needed, only the data no extra characters or text:\n\n{{resume_text}}",
-                'config' => $defaultConfig,
             ],
             [
                 'key' => 'job_skill_extraction',
                 'title' => 'Job Skill Extraction',
                 'body' => "Extract concise skill keywords from the following job description. Return a comma separated list of skill names only (no sentences, no extra text). Keep them lowercase and trim whitespace:\n\n{{job_description}}",
-                'config' => $defaultConfig,
             ],
             [
-                'key' => 'job_match',
-                'title' => 'Job Matching',
-                'body' => "Compare this resume with the job description and provide a match score (0-100) along with suggestions:\n\nResume:\n{{resume_text}}\n\nJob Description:\n{{job_description}}",
-                'config' => $defaultConfig,
+                'key' => 'pii_strip',
+                'title' => 'PII Anonymization',
+                'body' => <<<'PROMPT'
+You are a data anonymization assistant for a blind HR screening platform. Strip ALL personally identifiable information and indirect identifiers from the resume text below.
+
+Remove or replace:
+- Full names, first names, last names — omit entirely
+- Email addresses, phone numbers — omit entirely
+- Physical addresses (street, city, state, zip/postal code) — omit entirely
+- LinkedIn, GitHub, portfolio, personal website, or any personal URLs — omit entirely
+- University, college, or school names — replace with "University" or "Institution"
+- Graduation years and specific calendar dates — omit entirely; replace with relative phrasing where needed (e.g. "approximately 3 years of experience")
+- Any "X years of experience" statements that could imply birth year or current age — rephrase to describe skill level only (e.g. "experienced in" or "proficient in")
+- Employer or company names — replace with "Company A", "Company B", etc. ordered oldest to newest
+- Military discharge dates, service branch names that imply specific dates — omit dates; keep branch name only if relevant to skills
+- Fraternity, sorority, or alumni association memberships — omit entirely
+- Religious organization memberships that could imply protected characteristics — omit entirely
+- Any other information that could directly or indirectly reveal age, race, gender, national origin, religion, or disability status
+
+Preserve:
+- Job titles and role descriptions
+- Technical skills, tools, frameworks, languages
+- Responsibilities and accomplishments (without employer names or identifying metrics tied to named entities)
+- Relative durations of roles (e.g. "2 years", "18 months")
+
+Return ONLY the anonymized text. No preamble, no explanation, no commentary.
+
+Resume:
+{{resume_text}}
+PROMPT,
             ],
             [
-                'key' => 'cover_letter',
-                'title' => 'Cover Letter',
-                'body' => "Write a professional cover letter for the following job application. Use the resume information provided to tailor the cover letter.\n\nApplicant Name: {{applicant_name}}\n\nResume Summary:\n{{resume_text}}\n\nJob Description:\n{{job_description}}\n\nWrite a compelling cover letter that highlights relevant experience and skills from the resume that match the job requirements.",
-                'config' => $defaultConfig,
+                'key' => 'candidate_summary',
+                'title' => 'Anonymized Candidate Summary',
+                'body' => "Write a 3-5 sentence professional summary of this candidate based on the anonymized resume below. Focus only on skills, experience level, and key accomplishments. Do not include or infer any names, dates, company names, school names, or other identifying information.\n\n{{anonymized_text}}",
             ],
             [
-                'key' => 'job_resume_comparison',
-                'title' => 'Job vs Resume Comparison',
-                'body' => "Compare the job description with the candidate resume and provide a concise report including: 1) match percentage 0-100, 2) key matching skills, 3) missing skills, 4) short recommendation. Keep it brief and bullet-like.\n\nJob Description:\n{{job_description}}\n\nResume:\n{{resume_text}}",
-                'config' => $defaultConfig,
+                'key' => 'skill_gap_summary',
+                'title' => 'Skill Gap Summary',
+                'body' => <<<'PROMPT'
+Given a position requiring these skills: {{job_skills}}
+And a candidate whose profile includes: {{candidate_skills}}
+
+Write a concise 2-3 sentence professional explanation of the key skill gaps.
+Focus on what is missing or underdeveloped relative to the role requirements.
+Do not mention names, companies, dates, or any identifying information.
+Write in language appropriate to share directly with the candidate.
+PROMPT,
             ],
         ];
 
-        foreach ($prompts as $prompt) {
+        foreach ($prompts as $data) {
             Prompt::updateOrCreate(
-                ['key' => $prompt['key']],
+                ['key' => $data['key']],
                 [
-                    'title' => $prompt['title'],
-                    'body' => $prompt['body'],
-                    'config' => $prompt['config'],
+                    'title' => $data['title'],
+                    'body' => $data['body'],
+                    'config' => $defaultConfig,
                 ]
             );
         }
     }
 }
-

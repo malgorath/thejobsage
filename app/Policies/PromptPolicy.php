@@ -32,4 +32,3 @@ class PromptPolicy
         return $user->isAdmin();
     }
 }
-

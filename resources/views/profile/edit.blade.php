@@ -3,96 +3,61 @@
 @section('content')
 <div class="card">
     <div class="card-header">
-        <h2>Edit Profile</h2>
+        <h2>Account Settings</h2>
+        <p class="text-muted mb-0">Role: <span class="badge bg-secondary">{{ ucfirst($user->role) }}</span></p>
     </div>
     <div class="card-body">
-        @if(session('new_skills'))
-            <div id="skillPopup" class="modal fade show" style="display: block;" tabindex="-1">
-                <div class="modal-dialog">
-                    <div class="modal-content">
-                        <div class="modal-header">
-                            <h5 class="modal-title">Confirm New Skills</h5>
-                            <button type="button" class="btn-close" onclick="closeSkillPopup()"></button>
-                        </div>
-                        <div class="modal-body">
-                            <p>The following skills were detected in your resume:</p>
-                            <ul class="list-group">
-                                @foreach(session('new_skills') as $skill)
-                                    <li class="list-group-item">
-                                        <div class="form-check">
-                                            <input class="form-check-input" type="checkbox" name="confirmed_skills[]" value="{{ $skill }}" id="skill_{{ $loop->index }}" checked>
-                                            <label class="form-check-label" for="skill_{{ $loop->index }}">{{ $skill }}</label>
-                                        </div>
-                                    </li>
-                                @endforeach
-                            </ul>
-                        </div>
-                        <div class="modal-footer">
-                            <button type="button" class="btn btn-primary" onclick="submitNewSkills()">Confirm</button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div class="modal-backdrop fade show"></div>
 
-            <script>
-                function closeSkillPopup() {
-                    document.getElementById('skillPopup').style.display = 'none';
-                    document.querySelector('.modal-backdrop').remove();
-                }
-
-                function submitNewSkills() {
-                    let selectedSkills = [];
-                    document.querySelectorAll('input[name="confirmed_skills[]"]:checked').forEach(skill => {
-                        selectedSkills.push(skill.value);
-                    });
-
-                    fetch("{{ route('profile.skills.confirm') }}", {
-                        method: "POST",
-                        headers: {
-                            "Content-Type": "application/json",
-                            "X-CSRF-TOKEN": "{{ csrf_token() }}"
-                        },
-                        body: JSON.stringify({ skills: selectedSkills })
-                    }).then(response => {
-                        location.reload();
-                    });
-                }
-            </script>
+        @if(session('status') === 'profile-updated')
+            <div class="alert alert-success">Profile updated successfully.</div>
         @endif
 
-        <form method="POST" action="{{ route('profile.details.update', $user->id) }}">
+        <h5 class="mb-3">Profile Information</h5>
+        <form method="POST" action="{{ route('profile.update') }}" class="mb-4">
             @csrf
-            @method('POST')
+            @method('PATCH')
 
             <div class="mb-3">
-                <label for="address" class="form-label">Address</label>
-                <input type="text" class="form-control" id="address" name="address" value="{{ old('address', $user->userDetail->address ?? '') }}">
+                <label for="name" class="form-label">Name</label>
+                <input type="text"
+                       class="form-control @error('name') is-invalid @enderror"
+                       id="name" name="name"
+                       value="{{ old('name', $user->name) }}" required>
+                @error('name')
+                    <div class="invalid-feedback">{{ $message }}</div>
+                @enderror
             </div>
 
             <div class="mb-3">
-                <label for="phone" class="form-label">Phone</label>
-                <input type="text" class="form-control" id="phone" name="phone" value="{{ old('phone', $user->userDetail->phone ?? '') }}">
+                <label for="email" class="form-label">Email</label>
+                <input type="email"
+                       class="form-control @error('email') is-invalid @enderror"
+                       id="email" name="email"
+                       value="{{ old('email', $user->email) }}" required>
+                @error('email')
+                    <div class="invalid-feedback">{{ $message }}</div>
+                @enderror
             </div>
 
-            <div class="mb-3">
-                <label for="linkedin" class="form-label">LinkedIn</label>
-                <input type="text" class="form-control" id="linkedin" name="linkedin" value="{{ old('linkedin', $user->userDetail->linkedin ?? '') }}">
-            </div>
-
-            <button type="submit" class="btn btn-primary">Save Details</button>
+            <button type="submit" class="btn btn-primary">Save</button>
         </form>
 
         <hr class="my-4">
 
-        <h3 class="mb-3">Change Password</h3>
+        <h5 class="mb-3">Change Password</h5>
         <form method="POST" action="{{ route('password.update') }}" class="mb-4">
             @csrf
             @method('PUT')
 
+            @if(session('status') === 'password-updated')
+                <div class="alert alert-success">Password updated.</div>
+            @endif
+
             <div class="mb-3">
                 <label for="current_password" class="form-label">Current Password</label>
-                <input type="password" class="form-control @error('current_password', 'updatePassword') is-invalid @enderror" id="current_password" name="current_password" required>
+                <input type="password"
+                       class="form-control @error('current_password', 'updatePassword') is-invalid @enderror"
+                       id="current_password" name="current_password" required>
                 @error('current_password', 'updatePassword')
                     <div class="invalid-feedback">{{ $message }}</div>
                 @enderror
@@ -100,7 +65,9 @@
 
             <div class="mb-3">
                 <label for="password" class="form-label">New Password</label>
-                <input type="password" class="form-control @error('password', 'updatePassword') is-invalid @enderror" id="password" name="password" required>
+                <input type="password"
+                       class="form-control @error('password', 'updatePassword') is-invalid @enderror"
+                       id="password" name="password" required>
                 @error('password', 'updatePassword')
                     <div class="invalid-feedback">{{ $message }}</div>
                 @enderror
@@ -108,40 +75,33 @@
 
             <div class="mb-3">
                 <label for="password_confirmation" class="form-label">Confirm New Password</label>
-                <input type="password" class="form-control" id="password_confirmation" name="password_confirmation" required>
+                <input type="password" class="form-control"
+                       id="password_confirmation" name="password_confirmation" required>
             </div>
-
-            @if (session('status') === 'password-updated')
-                <div class="alert alert-success">Password updated successfully!</div>
-            @endif
 
             <button type="submit" class="btn btn-primary">Update Password</button>
         </form>
 
         <hr class="my-4">
 
-        <h3 class="mb-3">Skills</h3>
-
-        <form method="POST" action="{{ route('profile.skills.add', $user->id) }}" class="mb-3">
+        <h5 class="mb-3 text-danger">Delete Account</h5>
+        <form method="POST" action="{{ route('profile.destroy') }}"
+              onsubmit="return confirm('Permanently delete your account?');">
             @csrf
-            <div class="input-group">
-                <input type="text" name="skill" class="form-control" placeholder="New skill" required>
-                <button type="submit" class="btn btn-success">Add</button>
-            </div>
-        </form>
+            @method('DELETE')
 
-        <ul class="list-group">
-            @foreach($user->userSkills as $userSkill)
-                <li class="list-group-item d-flex justify-content-between align-items-center">
-                    {{ $userSkill->skill->name ?? ($userSkill->skill ?? 'Unknown Skill') }}
-                    <form method="POST" action="{{ route('profile.skills.delete', $userSkill->id) }}" class="d-inline">
-                        @csrf
-                        @method('DELETE')
-                        <button type="submit" class="btn btn-sm btn-danger">Remove</button>
-                    </form>
-                </li>
-            @endforeach
-        </ul>
+            <div class="mb-3">
+                <label for="del_password" class="form-label">Confirm your password</label>
+                <input type="password"
+                       class="form-control @error('password', 'userDeletion') is-invalid @enderror"
+                       id="del_password" name="password" required>
+                @error('password', 'userDeletion')
+                    <div class="invalid-feedback">{{ $message }}</div>
+                @enderror
+            </div>
+
+            <button type="submit" class="btn btn-danger">Delete My Account</button>
+        </form>
     </div>
 </div>
 @endsection

@@ -2,8 +2,8 @@
 
 namespace Tests\Feature;
 
-use App\Models\User;
 use App\Models\Skill;
+use App\Models\User;
 use Tests\TestCase;
 
 class SkillCrudTest extends TestCase
@@ -13,7 +13,7 @@ class SkillCrudTest extends TestCase
         $admin = User::factory()->create(['role' => 'admin']);
         // Create skills with unique names to avoid constraint violations
         for ($i = 0; $i < 5; $i++) {
-            Skill::factory()->create(['name' => 'Skill' . microtime(true) . $i]);
+            Skill::factory()->create(['name' => 'Skill'.microtime(true).$i]);
         }
 
         $response = $this->actingAs($admin)->get(route('admin.skills.index'));
@@ -24,7 +24,7 @@ class SkillCrudTest extends TestCase
     public function test_admin_can_create_skill(): void
     {
         $admin = User::factory()->create(['role' => 'admin']);
-        $skillName = 'PHP' . microtime(true); // Unique skill name
+        $skillName = 'PHP'.microtime(true); // Unique skill name
 
         $response = $this->actingAs($admin)->post(route('admin.skills.store'), [
             'name' => $skillName,
@@ -32,7 +32,7 @@ class SkillCrudTest extends TestCase
 
         $response->assertRedirect(route('admin.skills.index'));
         $response->assertSessionHas('success');
-        
+
         $this->assertDatabaseHas('skills', [
             'name' => $skillName,
         ]);
@@ -41,8 +41,8 @@ class SkillCrudTest extends TestCase
     public function test_admin_can_update_skill(): void
     {
         $admin = User::factory()->create(['role' => 'admin']);
-        $skill = Skill::factory()->create(['name' => 'PHP' . microtime(true)]);
-        $newName = 'JavaScript' . microtime(true); // Unique name
+        $skill = Skill::factory()->create(['name' => 'PHP'.microtime(true)]);
+        $newName = 'JavaScript'.microtime(true); // Unique name
 
         $response = $this->actingAs($admin)->put(route('admin.skills.update', $skill), [
             'name' => $newName,
@@ -50,7 +50,7 @@ class SkillCrudTest extends TestCase
 
         $response->assertRedirect(route('admin.skills.index'));
         $response->assertSessionHas('success');
-        
+
         $this->assertDatabaseHas('skills', [
             'id' => $skill->id,
             'name' => $newName,
@@ -60,13 +60,13 @@ class SkillCrudTest extends TestCase
     public function test_admin_can_delete_skill(): void
     {
         $admin = User::factory()->create(['role' => 'admin']);
-        $skill = Skill::factory()->create(['name' => 'DeleteSkill' . microtime(true)]);
+        $skill = Skill::factory()->create(['name' => 'DeleteSkill'.microtime(true)]);
 
         $response = $this->actingAs($admin)->delete(route('admin.skills.destroy', $skill));
 
         $response->assertRedirect(route('admin.skills.index'));
         $response->assertSessionHas('success');
-        
+
         $this->assertDatabaseMissing('skills', ['id' => $skill->id]);
     }
 
@@ -79,4 +79,3 @@ class SkillCrudTest extends TestCase
         $response->assertStatus(403);
     }
 }
-

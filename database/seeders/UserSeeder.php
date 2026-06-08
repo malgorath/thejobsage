@@ -3,64 +3,46 @@
 namespace Database\Seeders;
 
 use App\Models\User;
-use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
 
 class UserSeeder extends Seeder
 {
-    /**
-     * Run the database seeds.
-     */
-    public function run(): void {
-        // Define the specific user details
-        $email = 'test@home.net';
-        $firstName = 'Test';
-        $lastName = 'User';
-        $defaultPassword = 'password';
-
-        // Use firstOrCreate to prevent creating duplicates if the seeder runs again
-        $user = User::firstOrCreate(
+    public function run(): void
+    {
+        $seeds = [
             [
-                'email' => $email // Attribute to find the user by
+                'email' => 'admin@example.com',
+                'name' => 'Admin User',
+                'password' => 'admin123',
+                'role' => 'admin',
             ],
             [
-                'name' => $firstName . " " . $lastName,
-                'password' => Hash::make($defaultPassword), // Hash the password
-            ]
-        );
-
-        // Update the info message based on whether the user was created or found
-        if ($user->wasRecentlyCreated) {
-            $this->command->info("Created default user: {$firstName} {$lastName} ({$email}) with default password '{$defaultPassword}'.");
-        } else {
-            $this->command->info("Default user already exists: {$firstName} {$lastName} ({$email}). Password not changed.");
-        }
-
-        // Create admin user
-        $adminUser = User::firstOrCreate(
-            ['email' => 'admin@example.com'],
+                'email' => 'recruiter@example.com',
+                'name' => 'Test Recruiter',
+                'password' => 'password',
+                'role' => 'recruiter',
+            ],
             [
-                'name' => 'Admin User',
-                'password' => Hash::make('admin123'),
-                'role' => 'admin',
-            ]
-        );
+                'email' => 'hr@example.com',
+                'name' => 'Test HR Reviewer',
+                'password' => 'password',
+                'role' => 'hr',
+            ],
+        ];
 
-        if ($adminUser->wasRecentlyCreated) {
-            $this->command->info("Created admin user: admin@example.com with password 'admin123'.");
-        } else {
-            $this->command->info("Admin user already exists: admin@example.com");
+        foreach ($seeds as $data) {
+            $user = User::firstOrCreate(
+                ['email' => $data['email']],
+                [
+                    'name' => $data['name'],
+                    'password' => Hash::make($data['password']),
+                    'role' => $data['role'],
+                ]
+            );
+
+            $label = $user->wasRecentlyCreated ? 'Created' : 'Already exists';
+            $this->command->info("{$label}: {$data['email']} ({$data['role']})");
         }
-
-        $numberOfUsers = 10; // How many users to create
-
-        // Create users only
-        User::factory($numberOfUsers)->create()->each(function ($user) {
-            // You could add other user-specific seeding logic here if needed
-        });
-
-        // Update the info message
-        $this->command->info("Seeded {$numberOfUsers} users.");
     }
 }

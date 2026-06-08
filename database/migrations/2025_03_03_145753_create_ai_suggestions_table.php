@@ -12,9 +12,9 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('ai_suggestions', function (Blueprint $table) {
-	    $table->id();
-	    $table->foreignId('resume_id')->constrained()->onDelete('cascade');
-	    $table->json('suggestions');
+            $table->id();
+            $table->foreignId('resume_id')->constrained()->onDelete('cascade');
+            $table->json('suggestions');
             $table->timestamps();
         });
     }

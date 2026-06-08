@@ -5,15 +5,16 @@ namespace Tests\Feature\Auth;
 use App\Models\User; // Make sure to import your User model
 use Illuminate\Foundation\Testing\RefreshDatabase; // Resets DB for each test
 use Illuminate\Support\Facades\Hash;
-use Tests\TestCase;
-use Illuminate\Support\Facades\RateLimiter; // For rate limiting test
-use Illuminate\Support\Str; // Needed for throttle key generation
+use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Support\Str; // For rate limiting test
+use Tests\TestCase; // Needed for throttle key generation
 
 class AuthenticationTest extends TestCase
 {
     use RefreshDatabase; // Use this trait to automatically migrate and reset the database
 
     protected string $loginRoute;
+
     protected string $dashboardRoute; // Or wherever users are redirected after login
 
     protected function setUp(): void
@@ -133,10 +134,10 @@ class AuthenticationTest extends TestCase
      */
     public function validation_fails_with_empty_password(): void
     {
-         // Arrange: Need an email to test against, even if it doesn't exist,
-         // otherwise the email validation might trigger first.
-         // Alternatively, create a user first.
-         User::factory()->create(['email' => 'test@example.com']);
+        // Arrange: Need an email to test against, even if it doesn't exist,
+        // otherwise the email validation might trigger first.
+        // Alternatively, create a user first.
+        User::factory()->create(['email' => 'test@example.com']);
 
         // Act: Post with empty password
         $response = $this->post($this->loginRoute, [
@@ -158,7 +159,7 @@ class AuthenticationTest extends TestCase
     public function login_attempts_are_rate_limited(): void
     {
         // Arrange: Create a user
-         $user = User::factory()->create([
+        $user = User::factory()->create([
             'email' => 'throttle@example.com',
             'password' => Hash::make('ValidPass123'),
         ]);
@@ -170,7 +171,6 @@ class AuthenticationTest extends TestCase
         // Generate the throttle key Laravel uses (email lowercase + IP)
         // Note: In tests, the IP is usually '127.0.0.1'
         $throttleKey = Str::transliterate(Str::lower($user->email).'|127.0.0.1');
-
 
         // Act: Simulate failed attempts up to the limit
         for ($i = 0; $i < $maxAttempts; $i++) {

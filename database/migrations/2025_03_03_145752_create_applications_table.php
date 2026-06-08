@@ -12,10 +12,10 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('applications', function (Blueprint $table) {
-	    $table->id();
-	    $table->foreignId('user_id')->constrained()->onDelete('cascade');
-	    $table->foreignId('job_id')->constrained('jobListings')->onDelete('cascade');
-	    $table->enum('status', ['pending', 'reviewed', 'accepted', 'rejected'])->default('pending');
+            $table->id();
+            $table->foreignId('user_id')->constrained()->onDelete('cascade');
+            $table->foreignId('job_id')->constrained('jobListings')->onDelete('cascade');
+            $table->enum('status', ['pending', 'reviewed', 'accepted', 'rejected'])->default('pending');
             $table->timestamps();
         });
     }

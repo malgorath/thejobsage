@@ -1,8 +1,8 @@
 <?php
 
 use App\Models\Job;
-use App\Models\User;
 use App\Models\JobListingSkill;
+use App\Models\User;
 use App\Services\JobSkillService;
 use Illuminate\Support\Facades\Http;
 
@@ -63,4 +63,3 @@ test('shows job skills on job detail', function () {
         ->assertSee('Skills')
         ->assertSee('javascript');
 });
-

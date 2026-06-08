@@ -2,9 +2,9 @@
 
 namespace Tests\Feature;
 
-use App\Models\User;
-use App\Models\Job;
 use App\Models\Company;
+use App\Models\Job;
+use App\Models\User;
 use Tests\TestCase;
 
 class JobCrudTest extends TestCase
@@ -50,7 +50,7 @@ class JobCrudTest extends TestCase
 
         $response->assertRedirect(route('jobs.index'));
         $response->assertSessionHas('success');
-        
+
         $this->assertDatabaseHas('jobListings', [
             'title' => 'Software Engineer',
             'company' => 'Tech Corp',
@@ -79,12 +79,12 @@ class JobCrudTest extends TestCase
             'company' => 'Updated Company',
             'description' => 'Updated description',
             'location' => 'Updated Location',
-            'requirements' => "New requirement",
+            'requirements' => 'New requirement',
         ]);
 
         $response->assertRedirect(route('jobs.show', $job));
         $response->assertSessionHas('success');
-        
+
         $this->assertDatabaseHas('jobListings', [
             'id' => $job->id,
             'title' => 'Updated Title',
@@ -100,7 +100,7 @@ class JobCrudTest extends TestCase
 
         $response->assertRedirect(route('jobs.index'));
         $response->assertSessionHas('success');
-        
+
         $this->assertDatabaseMissing('jobListings', ['id' => $job->id]);
     }
 
@@ -137,4 +137,3 @@ class JobCrudTest extends TestCase
         $response->assertSee($job->title);
     }
 }
-

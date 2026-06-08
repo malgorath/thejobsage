@@ -14,13 +14,13 @@ return new class extends Migration
         Schema::create('resume_skill', function (Blueprint $table) {
             // Define the foreign key for the Resume model
             $table->foreignId('resume_id')
-                  ->constrained('resumes') // Explicitly link to 'resumes' table
-                  ->onDelete('cascade');   // If a resume is deleted, remove related skills links
+                ->constrained('resumes') // Explicitly link to 'resumes' table
+                ->onDelete('cascade');   // If a resume is deleted, remove related skills links
 
             // Define the foreign key for the Skill model
             $table->foreignId('skill_id')
-                  ->constrained('skills')   // Explicitly link to 'skills' table (assuming it's named 'skills')
-                  ->onDelete('cascade');   // If a skill is deleted, remove its links to resumes
+                ->constrained('skills')   // Explicitly link to 'skills' table (assuming it's named 'skills')
+                ->onDelete('cascade');   // If a skill is deleted, remove its links to resumes
 
             // Define a composite primary key to prevent duplicate resume-skill pairs
             $table->primary(['resume_id', 'skill_id']);

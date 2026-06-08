@@ -31,17 +31,17 @@ class UserManagementTest extends TestCase
     public function test_admin_can_update_user(): void
     {
         $admin = User::factory()->create(['role' => 'admin']);
-        $user = User::factory()->create(['role' => 'job_seeker', 'email' => 'original@example.com']);
+        $user = User::factory()->create(['role' => 'recruiter', 'email' => 'original@example.com']);
 
         $response = $this->actingAs($admin)->put(route('admin.users.update', $user), [
             'name' => 'Updated Name',
-            'email' => 'updated' . time() . '@example.com', // Unique email
+            'email' => 'updated'.time().'@example.com', // Unique email
             'role' => 'admin',
         ]);
 
         $response->assertRedirect(route('admin.users.index'));
         $response->assertSessionHas('success');
-        
+
         $user->refresh();
         $this->assertEquals('Updated Name', $user->name);
         $this->assertEquals('admin', $user->role);
@@ -56,7 +56,7 @@ class UserManagementTest extends TestCase
 
         $response->assertRedirect(route('admin.users.index'));
         $response->assertSessionHas('success');
-        
+
         $this->assertDatabaseMissing('users', ['id' => $user->id]);
     }
 
@@ -68,17 +68,16 @@ class UserManagementTest extends TestCase
 
         $response->assertRedirect(route('admin.users.index'));
         $response->assertSessionHas('error');
-        
+
         $this->assertDatabaseHas('users', ['id' => $admin->id]);
     }
 
     public function test_non_admin_cannot_access_user_management(): void
     {
-        $user = User::factory()->create(['role' => 'job_seeker']);
+        $user = User::factory()->create(['role' => 'recruiter']);
 
         $response = $this->actingAs($user)->get(route('admin.users.index'));
 
         $response->assertStatus(403);
     }
 }
-

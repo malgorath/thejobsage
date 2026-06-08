@@ -3,11 +3,25 @@
 namespace App\Http\Controllers;
 
 use App\Models\Prompt;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\View\View;
 
+/**
+ * Admin CRUD for Ollama prompt templates.
+ *
+ * Prompts are keyed records (e.g. `pii_strip`, `candidate_summary`) that the
+ * OllamaService resolves at runtime. Editing a prompt in the UI changes the
+ * model's behaviour without a code deploy.
+ *
+ * All actions are gated by the `Prompt` policy via `$this->authorize()`.
+ */
 class PromptController extends Controller
 {
-    public function index()
+    /**
+     * List all prompts, ordered alphabetically by title.
+     */
+    public function index(): View
     {
         $this->authorize('viewAny', Prompt::class);
 
@@ -16,14 +30,20 @@ class PromptController extends Controller
         return view('admin.prompts.index', compact('prompts'));
     }
 
-    public function create()
+    /**
+     * Show the form for creating a new prompt.
+     */
+    public function create(): View
     {
         $this->authorize('create', Prompt::class);
 
         return view('admin.prompts.create');
     }
 
-    public function store(Request $request)
+    /**
+     * Store a new prompt record.
+     */
+    public function store(Request $request): RedirectResponse
     {
         $this->authorize('create', Prompt::class);
 
@@ -34,14 +54,20 @@ class PromptController extends Controller
         return redirect()->route('admin.prompts.index')->with('success', 'Prompt created.');
     }
 
-    public function edit(Prompt $prompt)
+    /**
+     * Show the edit form for an existing prompt.
+     */
+    public function edit(Prompt $prompt): View
     {
         $this->authorize('update', $prompt);
 
         return view('admin.prompts.edit', compact('prompt'));
     }
 
-    public function update(Request $request, Prompt $prompt)
+    /**
+     * Update an existing prompt.
+     */
+    public function update(Request $request, Prompt $prompt): RedirectResponse
     {
         $this->authorize('update', $prompt);
 
@@ -52,7 +78,10 @@ class PromptController extends Controller
         return redirect()->route('admin.prompts.index')->with('success', 'Prompt updated.');
     }
 
-    public function destroy(Prompt $prompt)
+    /**
+     * Delete a prompt record.
+     */
+    public function destroy(Prompt $prompt): RedirectResponse
     {
         $this->authorize('delete', $prompt);
 
@@ -61,11 +90,18 @@ class PromptController extends Controller
         return redirect()->route('admin.prompts.index')->with('success', 'Prompt deleted.');
     }
 
+    /**
+     * Validate and reshape prompt form data, extracting numeric Ollama config
+     * fields into a nested `config` array for JSON storage.
+     *
+     * @param  int|null  $ignoreId  The ID of the prompt being updated (for unique key validation).
+     * @return array<string, mixed>
+     */
     private function validatedData(Request $request, ?int $ignoreId = null): array
     {
         $uniqueRule = 'unique:prompts,key';
         if ($ignoreId) {
-            $uniqueRule .= ',' . $ignoreId;
+            $uniqueRule .= ','.$ignoreId;
         }
 
         $validated = $request->validate([
@@ -99,4 +135,3 @@ class PromptController extends Controller
         return $validated;
     }
 }
-

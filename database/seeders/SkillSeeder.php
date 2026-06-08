@@ -3,7 +3,6 @@
 namespace Database\Seeders;
 
 use App\Models\Skill;
-use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB; // Import DB facade
 
@@ -17,14 +16,12 @@ class SkillSeeder extends Seeder
         $connection = DB::connection();
         $driver = $connection->getDriverName();
 
-        // Safely clear tables while respecting foreign keys
+        // Safely clear skills while respecting foreign keys
         if ($driver === 'mysql') {
             $connection->statement('SET FOREIGN_KEY_CHECKS=0;');
-            DB::table('user_skills')->truncate();
             DB::table('skills')->truncate();
             $connection->statement('SET FOREIGN_KEY_CHECKS=1;');
         } else {
-            DB::table('user_skills')->delete();
             DB::table('skills')->delete();
         }
 
@@ -42,17 +39,17 @@ class SkillSeeder extends Seeder
             // Data Science & ML
             'Pandas', 'NumPy', 'Scikit-learn', 'TensorFlow', 'PyTorch', 'SQL', 'Data Visualization', 'Big Data (Hadoop/Spark)',
             // Other IT Skills
-            'Git', 'REST APIs', 'GraphQL', 'Agile Methodologies', 'Scrum', 'JIRA', 'Network Configuration', 'Cybersecurity Principles', 'Penetration Testing', 'System Design', 'Microservices Architecture', 'Testing (Unit, Integration, E2E)', 'Problem Solving', 'Communication'
+            'Git', 'REST APIs', 'GraphQL', 'Agile Methodologies', 'Scrum', 'JIRA', 'Network Configuration', 'Cybersecurity Principles', 'Penetration Testing', 'System Design', 'Microservices Architecture', 'Testing (Unit, Integration, E2E)', 'Problem Solving', 'Communication',
         ];
 
         $skillData = [];
         $now = now();
         foreach ($skills as $skillName) {
-             // Use firstOrCreate to avoid duplicates if you don't truncate
+            // Use firstOrCreate to avoid duplicates if you don't truncate
             // Skill::firstOrCreate(['name' => $skillName]);
 
             // Or build array for mass insert (more efficient)
-             $skillData[] = ['name' => $skillName, 'created_at' => $now, 'updated_at' => $now];
+            $skillData[] = ['name' => $skillName, 'created_at' => $now, 'updated_at' => $now];
         }
 
         // Mass insert the skills

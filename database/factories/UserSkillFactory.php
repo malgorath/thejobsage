@@ -2,8 +2,8 @@
 
 namespace Database\Factories;
 
-use App\Models\User;
 use App\Models\Skill;
+use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 class UserSkillFactory extends Factory
@@ -16,4 +16,3 @@ class UserSkillFactory extends Factory
         ];
     }
 }
-

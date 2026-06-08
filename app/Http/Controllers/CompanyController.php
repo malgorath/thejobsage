@@ -3,32 +3,37 @@
 namespace App\Http\Controllers;
 
 use App\Models\Company;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\View\View;
 
+/**
+ * Admin CRUD for company records.
+ *
+ * Index and show are accessible to any authenticated user; create/store/edit/
+ * update/destroy require the `admin` middleware (enforced in constructor).
+ */
 class CompanyController extends Controller
 {
-    /**
-     * Create a new controller instance.
-     */
     public function __construct()
     {
-        // Only admins can manage companies
         $this->middleware('admin')->except(['index', 'show']);
     }
 
     /**
-     * Display a listing of companies.
+     * Paginated list of all companies.
      */
-    public function index()
+    public function index(): View
     {
         $companies = Company::latest()->paginate(20);
+
         return view('admin.companies.index', compact('companies'));
     }
 
     /**
      * Show the form for creating a new company.
      */
-    public function create()
+    public function create(): View
     {
         return view('admin.companies.create');
     }
@@ -36,7 +41,7 @@ class CompanyController extends Controller
     /**
      * Store a newly created company.
      */
-    public function store(Request $request)
+    public function store(Request $request): RedirectResponse
     {
         $validated = $request->validate([
             'name' => 'required|string|max:255',
@@ -50,25 +55,25 @@ class CompanyController extends Controller
     }
 
     /**
-     * Display the specified company.
+     * Display a single company.
      */
-    public function show(Company $company)
+    public function show(Company $company): View
     {
         return view('admin.companies.show', compact('company'));
     }
 
     /**
-     * Show the form for editing the specified company.
+     * Show the edit form for an existing company.
      */
-    public function edit(Company $company)
+    public function edit(Company $company): View
     {
         return view('admin.companies.edit', compact('company'));
     }
 
     /**
-     * Update the specified company.
+     * Update an existing company.
      */
-    public function update(Request $request, Company $company)
+    public function update(Request $request, Company $company): RedirectResponse
     {
         $validated = $request->validate([
             'name' => 'required|string|max:255',
@@ -82,13 +87,12 @@ class CompanyController extends Controller
     }
 
     /**
-     * Remove the specified company.
+     * Delete a company record.
      */
-    public function destroy(Company $company)
+    public function destroy(Company $company): RedirectResponse
     {
         $company->delete();
 
         return redirect()->route('admin.companies.index')->with('success', 'Company deleted successfully.');
     }
 }
-

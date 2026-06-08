@@ -23,7 +23,7 @@ class PasswordChangeTest extends TestCase
 
         $response->assertRedirect();
         $response->assertSessionHas('status', 'password-updated');
-        
+
         $this->assertTrue(Hash::check('newpassword123', $user->fresh()->password));
     }
 
@@ -71,4 +71,3 @@ class PasswordChangeTest extends TestCase
         $response->assertRedirect(route('login'));
     }
 }
-
