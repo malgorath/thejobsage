@@ -32,7 +32,9 @@
 
         <form method="POST"
               action="{{ route('recruiter.upload', $job->id) }}"
-              enctype="multipart/form-data">
+              enctype="multipart/form-data"
+              data-loading-overlay
+              data-loading-message="Analyzing resume...">
             @csrf
 
             <div class="mb-4">
@@ -69,6 +71,24 @@
                 @error('candidate_email')
                     <div class="invalid-feedback">{{ $message }}</div>
                 @enderror
+            </div>
+
+            <div class="mb-4">
+                <div class="form-check">
+                    <input class="form-check-input"
+                           type="checkbox"
+                           id="review_before_saving"
+                           name="review_before_saving"
+                           value="1"
+                           checked>
+                    <label class="form-check-label" for="review_before_saving">
+                        Review extracted data before saving
+                    </label>
+                    <div class="form-text">
+                        When checked, you will see the anonymized summary, extracted skills, and
+                        match score before anything is stored — and can cancel before saving.
+                    </div>
+                </div>
             </div>
 
             <button type="submit" class="btn btn-success">

@@ -7,6 +7,7 @@ use App\Models\Candidate;
 use App\Models\Job;
 use App\Models\Resume;
 use App\Services\CandidatePipelineService;
+use App\Services\ResumeTextExtractor;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -18,14 +19,18 @@ use Illuminate\View\View;
 /**
  * Recruiter interface for uploading resumes and managing the candidate pipeline.
  *
- * Recruiters can upload raw resume files (PDF/DOCX), download originals, and
- * mark positions as filled. The analysis pipeline (PII stripping, scoring) runs
- * synchronously on upload. HR never has access to the raw files — only the
- * anonymized summaries produced here.
+ * Raw resume files are NEVER stored to disk or database. Text is extracted from
+ * the uploaded file in-memory; only the AI-processed anonymized data is persisted.
+ * The optional review-before-saving step stages pipeline results in the session
+ * so the recruiter can inspect extracted skills and the anonymized summary before
+ * the candidate record is written to the database.
  */
 class RecruiterController extends Controller
 {
-    public function __construct(private CandidatePipelineService $pipeline) {}
+    public function __construct(
+        private CandidatePipelineService $pipeline,
+        private ResumeTextExtractor $extractor,
+    ) {}
 
     /**
      * List all jobs with candidate pipeline counts for the recruiter overview.
@@ -34,8 +39,8 @@ class RecruiterController extends Controller
     {
         $jobs = Job::withCount([
             'candidates',
-            'candidates as pending_count' => fn ($q) => $q->where('status', 'pending_analysis'),
-            'candidates as analyzed_count' => fn ($q) => $q->where('status', 'analyzed'),
+            'candidates as pending_count'    => fn ($q) => $q->where('status', 'pending_analysis'),
+            'candidates as analyzed_count'   => fn ($q) => $q->where('status', 'analyzed'),
             'candidates as shortlisted_count' => fn ($q) => $q->where('status', 'shortlisted'),
         ])
             ->orderByDesc('created_at')
@@ -53,51 +58,147 @@ class RecruiterController extends Controller
     }
 
     /**
-     * Accept a single resume upload with an optional candidate email for notifications.
+     * Accept a resume upload, run the pipeline in-memory, then either stage the
+     * result for review or save it directly.
      *
-     * After upload the full CandidatePipelineService::process() runs synchronously,
-     * transitioning the candidate from pending_analysis to analyzed before redirecting.
+     * The raw file binary is NEVER written to the database. Text is extracted
+     * from the uploaded temp file, processed through the AI pipeline, and then
+     * either staged in session (when review_before_saving is truthy) or
+     * persisted via saveCandidate() immediately.
      */
     public function upload(Request $request, Job $job): RedirectResponse
     {
         $request->validate([
-            'resume' => 'required|file|mimes:pdf,doc,docx|max:10240',
-            'candidate_email' => 'nullable|email|max:255',
+            'resume'               => 'required|file|mimes:pdf,doc,docx|max:10240',
+            'candidate_email'      => 'nullable|email|max:255',
+            'review_before_saving' => 'nullable|boolean',
         ]);
 
         try {
-            $file = $request->file('resume');
-            $slug = Str::slug(pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME));
-            $safeFilename = $slug.'_'.time().'.'.$file->getClientOriginalExtension();
+            $file    = $request->file('resume');
+            $content = file_get_contents($file->getRealPath());
+            $rawText = $this->extractor->extractContent($content, $file->getMimeType());
 
-            $resume = Resume::create([
-                'user_id' => null,
-                'uploaded_by' => Auth::id(),
-                'filename' => $safeFilename,
-                'mime_type' => $file->getClientMimeType(),
-                'file_data' => file_get_contents($file->getRealPath()),
-            ]);
+            if (empty(trim((string) $rawText))) {
+                return back()->withErrors([
+                    'resume' => 'Could not extract text from this file. Ensure the file is not password-protected or corrupted.',
+                ])->withInput();
+            }
 
-            $candidate = Candidate::create([
-                'job_id' => $job->id,
-                'resume_id' => $resume->id,
-                'uploaded_by' => Auth::id(),
-                'candidate_email' => $request->filled('candidate_email') ? $request->candidate_email : null,
-                'status' => 'pending_analysis',
-            ]);
+            $result = $this->pipeline->runPipeline($rawText, $job);
 
-            $this->pipeline->process($candidate);
+            $slug          = Str::slug(pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME));
+            $safeFilename  = $slug.'_'.time().'.'.$file->getClientOriginalExtension();
+            $mimeType      = $file->getClientMimeType();
+            $email         = $request->filled('candidate_email') ? $request->candidate_email : null;
+
+            if ($request->boolean('review_before_saving', true)) {
+                session([
+                    'upload_preview' => [
+                        'job_id'          => $job->id,
+                        'filename'        => $safeFilename,
+                        'mime_type'       => $mimeType,
+                        'candidate_email' => $email,
+                        'result'          => $result,
+                    ],
+                ]);
+
+                return redirect()->route('recruiter.upload.preview', $job);
+            }
+
+            $this->saveCandidate($job, $safeFilename, $mimeType, $email, $result);
 
             return redirect()
                 ->route('recruiter.jobs.show', $job)
-                ->with('success', 'Candidate processed successfully.');
+                ->with('success', 'Candidate processed and saved.');
         } catch (\Throwable $e) {
             Log::error("Candidate upload failed for job {$job->id}: {$e->getMessage()}");
 
-            return redirect()
-                ->route('recruiter.jobs.show', $job)
-                ->with('error', 'Upload failed — check logs for details.');
+            return back()
+                ->with('error', 'Upload failed — check logs for details.')
+                ->withInput();
         }
+    }
+
+    /**
+     * Show the staged pipeline result so the recruiter can review before confirming.
+     *
+     * Redirects back to the upload form when there is no staged result in session
+     * or when the staged job does not match the current job.
+     */
+    public function previewUpload(Job $job): View|RedirectResponse
+    {
+        $staged = session('upload_preview');
+
+        if (! $staged || ($staged['job_id'] ?? null) !== $job->id) {
+            return redirect()
+                ->route('recruiter.upload.form', $job)
+                ->with('info', 'No pending upload to preview. Please upload a file first.');
+        }
+
+        return view('recruiter.jobs.upload_preview', compact('job', 'staged'));
+    }
+
+    /**
+     * Persist the staged pipeline result and clear the session.
+     *
+     * Redirects back to the upload form when the session is missing or stale.
+     */
+    public function confirmUpload(Job $job): RedirectResponse
+    {
+        $staged = session('upload_preview');
+
+        if (! $staged || ($staged['job_id'] ?? null) !== $job->id) {
+            return redirect()->route('recruiter.upload.form', $job);
+        }
+
+        session()->forget('upload_preview');
+
+        $this->saveCandidate(
+            $job,
+            $staged['filename'],
+            $staged['mime_type'],
+            $staged['candidate_email'],
+            $staged['result'],
+        );
+
+        return redirect()
+            ->route('recruiter.jobs.show', $job)
+            ->with('success', 'Candidate saved successfully.');
+    }
+
+    /**
+     * Discard the staged pipeline result and clear the session.
+     */
+    public function discardUpload(Job $job): RedirectResponse
+    {
+        session()->forget('upload_preview');
+
+        return redirect()
+            ->route('recruiter.upload.form', $job)
+            ->with('info', 'Upload discarded. Nothing was saved.');
+    }
+
+    /**
+     * Re-run scoring and summary generation from stored data (no file needed).
+     *
+     * Useful after a job's required skills have been updated post-upload.
+     * Updates match_score and, when anonymized_text is on record, regenerates
+     * the summary. Extracted skills on the resume pivot are preserved as-is.
+     */
+    public function reevaluate(Candidate $candidate): RedirectResponse
+    {
+        try {
+            $this->pipeline->reevaluate($candidate);
+        } catch (\Throwable $e) {
+            Log::error("Re-evaluation failed for candidate {$candidate->id}: {$e->getMessage()}");
+
+            return back()->with('error', 'Re-evaluation failed — check logs for details.');
+        }
+
+        return redirect()
+            ->route('recruiter.jobs.show', $candidate->job_id)
+            ->with('success', 'Candidate re-evaluated.');
     }
 
     /**
@@ -111,35 +212,6 @@ class RecruiterController extends Controller
             ->get();
 
         return view('recruiter.jobs.show', compact('job', 'candidates'));
-    }
-
-    /**
-     * Stream the original raw resume binary to the authenticated recruiter.
-     *
-     * Access is restricted to the uploading recruiter and admins. HR users
-     * cannot reach this endpoint — it is behind the `recruiter` middleware.
-     *
-     * @return \Illuminate\Http\Response
-     *
-     * @throws \Symfony\Component\HttpKernel\Exception\HttpException 403 if not authorized, 404 if no resume.
-     */
-    public function download(Candidate $candidate)
-    {
-        if (
-            Auth::id() !== $candidate->uploaded_by
-            && ! Auth::user()->isAdmin()
-        ) {
-            abort(403, 'You do not have permission to download this file.');
-        }
-
-        $resume = $candidate->resume;
-        if (! $resume) {
-            abort(404, 'Resume file not found.');
-        }
-
-        return response($resume->file_data)
-            ->header('Content-Type', $resume->mime_type)
-            ->header('Content-Disposition', 'attachment; filename="'.$resume->filename.'"');
     }
 
     /**
@@ -159,9 +231,6 @@ class RecruiterController extends Controller
     /**
      * Mark a job as filled and queue position-filled notifications to all
      * active candidates who provided an email address.
-     *
-     * Rejected candidates are excluded from the notification — they already
-     * received a rejection email at rejection time.
      */
     public function closeJob(Job $job): RedirectResponse
     {
@@ -183,7 +252,7 @@ class RecruiterController extends Controller
         }
 
         $notifiedCount = $notifiable->count();
-        $message = 'Position marked as filled.';
+        $message       = 'Position marked as filled.';
         if ($notifiedCount > 0) {
             $message .= " {$notifiedCount} candidate(s) notified.";
         }
@@ -191,5 +260,38 @@ class RecruiterController extends Controller
         return redirect()
             ->route('recruiter.jobs.show', $job)
             ->with('success', $message);
+    }
+
+    /**
+     * Create a Resume record (no file_data) and a Candidate from a pipeline result.
+     *
+     * Called from upload() (direct save path) and confirmUpload() (preview path).
+     * Raw file binary is intentionally omitted — it was never stored anywhere.
+     *
+     * @param  array  $result  Return value from CandidatePipelineService::runPipeline().
+     */
+    private function saveCandidate(
+        Job $job,
+        string $filename,
+        string $mimeType,
+        ?string $email,
+        array $result,
+    ): void {
+        $resume = Resume::create([
+            'user_id'     => null,
+            'uploaded_by' => Auth::id(),
+            'filename'    => $filename,
+            'mime_type'   => $mimeType,
+        ]);
+
+        $candidate = Candidate::create([
+            'job_id'          => $job->id,
+            'resume_id'       => $resume->id,
+            'uploaded_by'     => Auth::id(),
+            'candidate_email' => $email,
+            'status'          => 'pending_analysis',
+        ]);
+
+        $this->pipeline->persistResult($candidate, $result);
     }
 }

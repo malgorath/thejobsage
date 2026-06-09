@@ -45,9 +45,7 @@ test('stripPii falls back to raw text on malformed response', function () {
 
 test('skill extraction returns array of skills', function () {
     Http::fake([
-        config('ollama.api_url') => Http::response([
-            'response' => 'PHP, Laravel, MySQL',
-        ], 200),
+        config('ollama.api_url') => Http::response(['response' => 'PHP, Laravel, MySQL'], 200),
     ]);
 
     $skills = $this->aiService->extractSkills('PHP, Laravel, MySQL developer.');

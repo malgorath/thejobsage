@@ -16,6 +16,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property int|null $uploaded_by Null for portal self-submissions.
  * @property string|null $candidate_email Used for all three notification mailables.
  * @property string|null $submission_token UUID; null for recruiter-uploaded candidates.
+ * @property string|null $anonymized_text PII-stripped resume text used for re-evaluation; never exposes raw data.
  * @property string|null $anonymized_summary LLM-generated; no PII.
  * @property int|null $match_score 0–100 skill overlap percentage, or null if no job skills exist.
  * @property string $status pending_analysis|analyzed|shortlisted|rejected
@@ -34,6 +35,7 @@ class Candidate extends Model
         'uploaded_by',
         'candidate_email',
         'submission_token',
+        'anonymized_text',
         'anonymized_summary',
         'match_score',
         'status',

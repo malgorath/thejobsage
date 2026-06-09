@@ -54,7 +54,7 @@ class JobSkillService
             return;
         }
 
-        $raw = $response->json()['response'] ?? '';
+        $raw = $this->ollamaService->extractResponseText($response);
         $skills = array_filter(array_map(
             fn ($s) => Str::of($s)->lower()->trim()->value(),
             explode(',', $raw)

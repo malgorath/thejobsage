@@ -22,9 +22,9 @@ it('returns raw text when ollama is unreachable during pii strip', function () {
 
 it('uses database prompt body when pii_strip prompt exists', function () {
     Prompt::create([
-        'key' => 'pii_strip',
-        'title' => 'PII Strip',
-        'body' => 'Strip PII: {{resume_text}}',
+        'key'    => 'pii_strip',
+        'title'  => 'PII Strip',
+        'body'   => 'Strip PII: {{resume_text}}',
         'config' => ['temperature' => 0.1],
     ]);
 
@@ -44,9 +44,7 @@ it('uses database prompt body when pii_strip prompt exists', function () {
 
 it('returns extracted skills as array', function () {
     Http::fake([
-        config('ollama.api_url') => Http::response([
-            'response' => 'PHP, Laravel, JavaScript',
-        ], 200),
+        config('ollama.api_url') => Http::response(['response' => 'PHP, Laravel, JavaScript'], 200),
     ]);
 
     $service = app(OllamaService::class);

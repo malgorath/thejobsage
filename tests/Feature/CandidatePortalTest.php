@@ -10,12 +10,12 @@ use Illuminate\Support\Str;
 
 beforeEach(function () {
     Mail::fake();
-    // Mock the pipeline so it doesn't call Ollama
+    // Mock the pipeline so it doesn't call Ollama; portal now calls processRaw()
     $this->mock(CandidatePipelineService::class, function ($mock) {
-        $mock->shouldReceive('process')->andReturnUsing(function (Candidate $candidate) {
+        $mock->shouldReceive('processRaw')->andReturnUsing(function (Candidate $candidate, string $rawText) {
             $candidate->update([
-                'status' => 'analyzed',
-                'match_score' => 75,
+                'status'             => 'analyzed',
+                'match_score'        => 75,
                 'anonymized_summary' => 'Experienced developer with strong PHP skills.',
             ]);
         });

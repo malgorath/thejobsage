@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AdminController;
 use App\Http\Controllers\CandidatePortalController;
+use App\Http\Controllers\HealthController;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\HrController;
 use App\Http\Controllers\JobController;
@@ -13,6 +14,7 @@ use Illuminate\Support\Facades\Route;
 // ─── Public ──────────────────────────────────────────────────────────────────
 
 Route::get('/', [HomeController::class, 'index'])->name('home');
+Route::get('/health', HealthController::class)->name('health');
 
 Route::get('/jobs', [JobController::class, 'index'])->name('jobs.index');
 Route::get('/jobs/{job}', [JobController::class, 'show'])->name('jobs.show')
@@ -71,10 +73,16 @@ Route::middleware('auth')->group(function () {
                 ->name('upload.form');
             Route::post('/jobs/{job}/upload', [RecruiterController::class, 'upload'])
                 ->name('upload');
+            Route::get('/jobs/{job}/upload/preview', [RecruiterController::class, 'previewUpload'])
+                ->name('upload.preview');
+            Route::post('/jobs/{job}/upload/confirm', [RecruiterController::class, 'confirmUpload'])
+                ->name('upload.confirm');
+            Route::post('/jobs/{job}/upload/discard', [RecruiterController::class, 'discardUpload'])
+                ->name('upload.discard');
             Route::get('/jobs/{job}/candidates', [RecruiterController::class, 'show'])
                 ->name('jobs.show');
-            Route::get('/candidates/{candidate}/download', [RecruiterController::class, 'download'])
-                ->name('candidate.download');
+            Route::post('/candidates/{candidate}/reevaluate', [RecruiterController::class, 'reevaluate'])
+                ->name('candidate.reevaluate');
             Route::patch('/candidates/{candidate}/status', [RecruiterController::class, 'updateStatus'])
                 ->name('candidate.status');
             Route::patch('/jobs/{job}/close', [RecruiterController::class, 'closeJob'])

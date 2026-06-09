@@ -19,7 +19,7 @@ beforeEach(function () {
 
 test('confirmation mail is queued after portal submission', function () {
     $this->mock(CandidatePipelineService::class, function ($mock) {
-        $mock->shouldReceive('process')->andReturnUsing(function (Candidate $candidate) {
+        $mock->shouldReceive('processRaw')->andReturnUsing(function (Candidate $candidate, string $rawText) {
             $candidate->update(['status' => 'analyzed', 'match_score' => 60]);
         });
     });

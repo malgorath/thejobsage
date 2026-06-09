@@ -148,7 +148,7 @@
 
         <div id="loading-overlay" aria-live="polite" aria-busy="true" role="status">
             <div class="loading-brain" aria-hidden="true">🧠</div>
-            <div class="text-white mt-3 fw-semibold">Analyzing resume...</div>
+            <div id="loading-overlay-message" class="text-white mt-3 fw-semibold">Analyzing resume...</div>
         </div>
 
         <!-- Bootstrap JS Bundle (includes Popper) -->
@@ -157,27 +157,35 @@
         <script>
             (function () {
                 const overlay = document.getElementById('loading-overlay');
+                const messageEl = document.getElementById('loading-overlay-message');
+                const defaultMessage = messageEl ? messageEl.textContent : '';
                 if (!overlay) return;
 
-                const showOverlay = () => overlay.classList.add('show');
+                const showOverlay = (message) => {
+                    if (messageEl) {
+                        messageEl.textContent = (message && message.trim()) ? message.trim() : defaultMessage;
+                    }
+                    overlay.classList.add('show');
+                };
                 const hideOverlay = () => overlay.classList.remove('show');
 
                 // Expose helpers in case inline handlers ever need them
                 window.__showLoadingOverlay = showOverlay;
                 window.__hideLoadingOverlay = hideOverlay;
 
-                // Capture clicks on any element marked with data-loading-overlay (event delegation)
+                // Capture clicks on any element marked with data-loading-overlay (event delegation).
+                // Reads optional data-loading-message for a context-specific status string.
                 document.addEventListener('click', (event) => {
                     const target = event.target.closest('[data-loading-overlay]');
                     if (!target) return;
                     if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-                    showOverlay();
+                    showOverlay(target.dataset.loadingMessage);
                 }, true);
 
                 // Also handle form submissions with the attribute
                 document.addEventListener('submit', (event) => {
                     if (event.target?.hasAttribute('data-loading-overlay')) {
-                        showOverlay();
+                        showOverlay(event.target.dataset.loadingMessage);
                     }
                 }, true);
 

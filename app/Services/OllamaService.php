@@ -18,9 +18,11 @@ use Illuminate\Support\Facades\Log;
  */
 class OllamaService
 {
-    protected static $baseUrl;
+    protected string $baseUrl;
 
-    protected static $llm_model;
+    protected string $llmModel;
+
+    protected string $apiType;
 
     protected array $defaultConfig = [
         'temperature' => 0.7,
@@ -34,8 +36,9 @@ class OllamaService
 
     public function __construct()
     {
-        self::$baseUrl = config('ollama.api_url');
-        self::$llm_model = config('ollama.llm_model');
+        $this->baseUrl  = config('ollama.api_url');
+        $this->llmModel = config('ollama.llm_model');
+        $this->apiType  = config('ollama.api_type', 'ollama');
     }
 
     /**
@@ -70,7 +73,7 @@ class OllamaService
             return $text;
         }
 
-        $result = $response->json()['response'] ?? '';
+        $result = $this->extractResponseText($response);
 
         return $result !== '' ? $result : $text;
     }
@@ -86,13 +89,6 @@ class OllamaService
      */
     public function extractSkills(string $text): array
     {
-        if (! isset(self::$baseUrl)) {
-            self::$baseUrl = config('ollama.api_url');
-        }
-        if (! isset(self::$llm_model)) {
-            self::$llm_model = config('ollama.llm_model');
-        }
-
         [$prompt, $config] = $this->promptPayload(
             'skill_extraction',
             ['resume_text' => $text],
@@ -108,9 +104,9 @@ class OllamaService
         }
 
         if ($response->successful()) {
-            $data = $response->json();
-            if (isset($data['response'])) {
-                return array_map('trim', explode(',', $data['response']));
+            $text = $this->extractResponseText($response);
+            if ($text !== '') {
+                return array_map('trim', explode(',', $text));
             }
         }
 
@@ -162,7 +158,7 @@ PROMPT
             return '';
         }
 
-        return $response->json()['response'] ?? '';
+        return $this->extractResponseText($response);
     }
 
     /**
@@ -186,22 +182,56 @@ PROMPT
     }
 
     /**
-     * Post a prompt to the Ollama REST API and return the raw HTTP response.
+     * Post a prompt to the configured AI backend.
+     *
+     * Supports two wire formats controlled by OLLAMA_API_TYPE:
+     *
+     *  'ollama'  — Ollama native: {"model", "prompt", "stream": false, ...config}
+     *              Expects {"response": "..."} in the reply.
+     *
+     *  'openai'  — OpenAI-compatible: {"model", "messages": [{"role":"user","content":"..."}], "stream": false, ...config}
+     *              Expects {"choices": [{"message": {"content": "..."}}]} in the reply.
+     *              Compatible with llama.cpp --server, LM Studio, vLLM, LocalAI,
+     *              and Ollama's own /v1/chat/completions endpoint.
      *
      * @param  string  $prompt  The fully rendered prompt string.
-     * @param  array  $config  Model parameters (temperature, top_p, etc.).
+     * @param  array   $config  Model parameters (temperature, top_p, etc.).
      *
-     * @throws \Illuminate\Http\Client\ConnectionException When Ollama is unreachable.
+     * @throws \Illuminate\Http\Client\ConnectionException  When the server is unreachable.
      */
     public function postToOllama(string $prompt, array $config): Response
     {
-        $payload = array_merge([
-            'model' => self::$llm_model,
-            'prompt' => $prompt,
-            'stream' => false,
-        ], $this->filterConfig($config));
+        if ($this->apiType === 'openai') {
+            $base = [
+                'model'    => $this->llmModel,
+                'messages' => [['role' => 'user', 'content' => $prompt]],
+                'stream'   => false,
+            ];
+        } else {
+            $base = [
+                'model'  => $this->llmModel,
+                'prompt' => $prompt,
+                'stream' => false,
+            ];
+        }
 
-        return Http::timeout(config('ollama.timeout', 120))->post(self::$baseUrl, $payload);
+        return Http::timeout(config('ollama.timeout', 120))->post($this->baseUrl, array_merge($base, $this->filterConfig($config)));
+    }
+
+    /**
+     * Extract the assistant reply text from an AI backend response.
+     *
+     * Reads from `choices[0].message.content` for OpenAI-compatible responses,
+     * or from `response` for Ollama native responses.
+     * Returns an empty string when the field is absent or the response is malformed.
+     */
+    public function extractResponseText(Response $response): string
+    {
+        if ($this->apiType === 'openai') {
+            return $response->json()['choices'][0]['message']['content'] ?? '';
+        }
+
+        return $response->json()['response'] ?? '';
     }
 
     /**

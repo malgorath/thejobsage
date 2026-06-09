@@ -7,6 +7,7 @@ use App\Models\Candidate;
 use App\Models\Job;
 use App\Models\Resume;
 use App\Services\CandidatePipelineService;
+use App\Services\ResumeTextExtractor;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Mail;
@@ -22,7 +23,10 @@ use Illuminate\View\View;
  */
 class CandidatePortalController extends Controller
 {
-    public function __construct(private CandidatePipelineService $pipeline) {}
+    public function __construct(
+        private CandidatePipelineService $pipeline,
+        private ResumeTextExtractor $extractor,
+    ) {}
 
     /**
      * Show the public application form for a job.
@@ -68,28 +72,33 @@ class CandidatePortalController extends Controller
             return back()->with('info', "You've already applied for this position. Check your email for your status link.");
         }
 
-        $file = $request->file('resume');
-        $slug = Str::slug(pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME));
+        $file         = $request->file('resume');
+        $slug         = Str::slug(pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME));
         $safeFilename = $slug.'_'.time().'.'.$file->getClientOriginalExtension();
 
+        // Extract text before creating the DB record — the raw binary is never stored.
+        $rawText = $this->extractor->extractContent(
+            file_get_contents($file->getRealPath()),
+            $file->getMimeType()
+        ) ?? '';
+
         $resume = Resume::create([
-            'user_id' => null,
+            'user_id'     => null,
             'uploaded_by' => null,
-            'filename' => $safeFilename,
-            'mime_type' => $file->getClientMimeType(),
-            'file_data' => file_get_contents($file->getRealPath()),
+            'filename'    => $safeFilename,
+            'mime_type'   => $file->getClientMimeType(),
         ]);
 
         $candidate = Candidate::create([
-            'job_id' => $job->id,
-            'resume_id' => $resume->id,
-            'uploaded_by' => null,
-            'candidate_email' => $request->candidate_email,
+            'job_id'           => $job->id,
+            'resume_id'        => $resume->id,
+            'uploaded_by'      => null,
+            'candidate_email'  => $request->candidate_email,
             'submission_token' => Str::uuid()->toString(),
-            'status' => 'pending_analysis',
+            'status'           => 'pending_analysis',
         ]);
 
-        $this->pipeline->process($candidate);
+        $this->pipeline->processRaw($candidate, $rawText);
         $candidate->refresh();
 
         Mail::to($candidate->candidate_email)->queue(new CandidateConfirmationMail($candidate));

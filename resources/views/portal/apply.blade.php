@@ -61,7 +61,9 @@
                     @endif
 
                     <form method="POST" action="{{ route('portal.submit', $job->id) }}"
-                          enctype="multipart/form-data">
+                          enctype="multipart/form-data"
+                          data-loading-overlay
+                          data-loading-message="Analyzing your resume...">
                         @csrf
 
                         <div class="mb-4">

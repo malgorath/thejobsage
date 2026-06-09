@@ -13,9 +13,7 @@ beforeEach(function () {
 
 test('extracts job skills on create', function () {
     Http::fake([
-        config('ollama.api_url') => Http::response([
-            'response' => 'php, laravel, mysql',
-        ], 200),
+        config('ollama.api_url') => Http::response(['response' => 'php, laravel, mysql'], 200),
     ]);
 
     $job = Job::factory()->create([
@@ -32,9 +30,7 @@ test('extracts job skills on create', function () {
 
 test('extracts job skills on first view when missing', function () {
     Http::fake([
-        config('ollama.api_url') => Http::response([
-            'response' => 'react, node',
-        ], 200),
+        config('ollama.api_url') => Http::response(['response' => 'react, node'], 200),
     ]);
 
     $job = Job::factory()->create([

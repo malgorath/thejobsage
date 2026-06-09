@@ -117,13 +117,19 @@
                                 } }}">{{ ucfirst(str_replace('_', ' ', $candidate->status)) }}</span>
                             </td>
                             <td>
-                                {{-- Recruiter can download the raw resume --}}
-                                @if($candidate->resume)
-                                    <a href="{{ route('recruiter.candidate.download', $candidate->id) }}"
-                                       class="btn btn-sm btn-outline-secondary me-1"
-                                       title="Download original resume">
-                                        <i class="bi bi-download"></i>
-                                    </a>
+                                {{-- Re-evaluate: update score/summary when job skills change --}}
+                                @if(in_array($candidate->status, ['analyzed', 'shortlisted']))
+                                    <form action="{{ route('recruiter.candidate.reevaluate', $candidate->id) }}"
+                                          method="POST" class="d-inline"
+                                          data-loading-overlay
+                                          data-loading-message="Re-evaluating candidate...">
+                                        @csrf
+                                        <button type="submit"
+                                                class="btn btn-sm btn-outline-secondary me-1"
+                                                title="Re-calculate score and regenerate summary from stored data">
+                                            <i class="bi bi-arrow-repeat"></i>
+                                        </button>
+                                    </form>
                                 @endif
 
                                 {{-- Quick status toggle --}}
