@@ -173,11 +173,14 @@
                 window.__showLoadingOverlay = showOverlay;
                 window.__hideLoadingOverlay = hideOverlay;
 
-                // Capture clicks on any element marked with data-loading-overlay (event delegation).
-                // Reads optional data-loading-message for a context-specific status string.
+                // Capture clicks on non-form elements marked with data-loading-overlay.
+                // Forms are handled exclusively by the submit listener below so that
+                // clicking a child element (e.g. a file input) does not trigger the
+                // overlay before the user actually submits.
                 document.addEventListener('click', (event) => {
                     const target = event.target.closest('[data-loading-overlay]');
                     if (!target) return;
+                    if (target.tagName === 'FORM') return;
                     if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
                     showOverlay(target.dataset.loadingMessage);
                 }, true);
