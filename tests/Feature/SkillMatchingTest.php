@@ -157,3 +157,71 @@ test('C# job skill matches C# extracted skill', function () {
 
     expect(pipelineScore($job, 'C#'))->toBe(100);
 });
+
+// ─── Version suffix stripping ─────────────────────────────────────────────────
+
+test('version suffix: PHP 8+ extracted matches job skill php', function () {
+    $job = Job::factory()->create();
+    $job->listingSkills()->attach(JobListingSkill::firstOrCreate(['name' => 'php'])->id);
+
+    expect(pipelineScore($job, 'PHP 8+'))->toBe(100);
+});
+
+test('version suffix: job skill PHP 8+ matches extracted php', function () {
+    $job = Job::factory()->create();
+    $job->listingSkills()->attach(JobListingSkill::firstOrCreate(['name' => 'PHP 8+'])->id);
+
+    expect(pipelineScore($job, 'php'))->toBe(100);
+});
+
+test('version suffix: Node 18.x extracted matches job skill node', function () {
+    $job = Job::factory()->create();
+    $job->listingSkills()->attach(JobListingSkill::firstOrCreate(['name' => 'node'])->id);
+
+    expect(pipelineScore($job, 'Node 18.x'))->toBe(100);
+});
+
+test('version suffix: Python 3 extracted matches job skill python', function () {
+    $job = Job::factory()->create();
+    $job->listingSkills()->attach(JobListingSkill::firstOrCreate(['name' => 'python'])->id);
+
+    expect(pipelineScore($job, 'Python 3'))->toBe(100);
+});
+
+// ─── Alias map ────────────────────────────────────────────────────────────────
+
+test('alias: RESTful APIs extracted matches job skill rest api', function () {
+    $job = Job::factory()->create();
+    $job->listingSkills()->attach(JobListingSkill::firstOrCreate(['name' => 'rest api'])->id);
+
+    expect(pipelineScore($job, 'RESTful APIs'))->toBe(100);
+});
+
+test('alias: RESTful APIs extracted matches job skill rest', function () {
+    $job = Job::factory()->create();
+    $job->listingSkills()->attach(JobListingSkill::firstOrCreate(['name' => 'rest'])->id);
+
+    expect(pipelineScore($job, 'RESTful APIs'))->toBe(100);
+});
+
+test('alias: rest api job skill matches RESTful APIs extracted', function () {
+    $job = Job::factory()->create();
+    $job->listingSkills()->attach(JobListingSkill::firstOrCreate(['name' => 'RESTful APIs'])->id);
+
+    expect(pipelineScore($job, 'rest api'))->toBe(100);
+});
+
+test('alias: Git Version Control extracted matches job skill git', function () {
+    $job = Job::factory()->create();
+    $job->listingSkills()->attach(JobListingSkill::firstOrCreate(['name' => 'git'])->id);
+
+    expect(pipelineScore($job, 'Git Version Control'))->toBe(100);
+});
+
+test('alias: Docker Containerization extracted matches job skill docker', function () {
+    $job = Job::factory()->create();
+    $job->listingSkills()->attach(JobListingSkill::firstOrCreate(['name' => 'docker'])->id);
+
+    // & is stripped to a space → "docker containerization" hits the alias map
+    expect(pipelineScore($job, 'Docker & Containerization'))->toBe(100);
+});

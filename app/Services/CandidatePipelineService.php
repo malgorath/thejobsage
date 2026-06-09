@@ -278,24 +278,71 @@ class CandidatePipelineService
     /**
      * Normalize a skill name into word tokens for fuzzy matching.
      *
-     * Steps: lowercase → strip parentheses/brackets (content kept) →
-     * strip misc punctuation (preserving '+' and '#' for C++/C#) →
-     * split on whitespace.
+     * Steps: lowercase → strip brackets → strip misc punctuation → normalize
+     * whitespace → whole-string alias resolution → tokenize → drop version
+     * specifier tokens ("8+", "v3", "18.x") → per-token alias canonicalization.
      *
      * Examples:
-     *   "PHP (Laravel)"   → ["php", "laravel"]
-     *   "React.js"        → ["react", "js"]
-     *   "C++"             → ["c++"]
-     *   "Node JS"         → ["node", "js"]
+     *   "PHP (Laravel)"        → ["php", "laravel"]
+     *   "PHP 8+"               → ["php"]          (version token stripped)
+     *   "React.js"             → ["react", "js"]
+     *   "C++"                  → ["c++"]           (+ preserved)
+     *   "RESTful APIs"         → ["rest", "api"]   (alias + token canon)
+     *   "Git Version Control"  → ["git"]           (whole-string alias)
      */
     private function skillTokens(string $skill): array
     {
         $s = mb_strtolower($skill);
-        $s = preg_replace('/[()[\]{}<>]/', ' ', $s);   // strip brackets, keep content
-        $s = preg_replace('/[^\w\s#+]/', ' ', $s);      // strip misc punctuation
-        $s = trim(preg_replace('/\s+/', ' ', $s));
+        $s = (string) preg_replace('/[()[\]{}<>]/', ' ', $s);
+        $s = (string) preg_replace('/[^\w\s#+]/', ' ', $s);
+        $s = trim((string) preg_replace('/\s+/', ' ', $s));
 
-        return array_values(array_filter(explode(' ', $s), fn ($t) => $t !== ''));
+        // Resolve common whole-string aliases after basic cleanup so the lookup
+        // key is consistent regardless of original punctuation/spacing.
+        $s = $this->resolveSkillAlias($s);
+
+        // Tokenize; discard version-specifier tokens ("8+", "v3", "18.x", "3.0")
+        $tokens = array_values(array_filter(
+            explode(' ', $s),
+            static fn ($t) => $t !== '' && ! preg_match('/^v?\d[\d.+*x~^><=-]*$/i', $t)
+        ));
+
+        // Apply per-token canonical aliases ("restful" → "rest", "apis" → "api")
+        return array_values(array_unique(array_map(
+            fn ($t) => $this->canonicalToken($t),
+            $tokens
+        )));
+    }
+
+    /**
+     * Map normalized whole-string skill phrases to canonical equivalents.
+     * Input must already be lowercased with punctuation stripped.
+     */
+    private function resolveSkillAlias(string $normalized): string
+    {
+        static $aliases = [
+            'git version control'       => 'git',
+            'git scm'                   => 'git',
+            'docker containerization'   => 'docker',
+            'restful api'               => 'rest api',
+            'restful apis'              => 'rest api',
+            'rest apis'                 => 'rest api',
+            'graphql api'               => 'graphql',
+            'graphql apis'              => 'graphql',
+        ];
+
+        return $aliases[$normalized] ?? $normalized;
+    }
+
+    /** Map individual skill tokens to canonical forms. */
+    private function canonicalToken(string $token): string
+    {
+        static $map = [
+            'restful' => 'rest',
+            'apis'    => 'api',
+        ];
+
+        return $map[$token] ?? $token;
     }
 
     /**
