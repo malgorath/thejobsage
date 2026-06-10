@@ -106,11 +106,33 @@ class OllamaService
         if ($response->successful()) {
             $text = $this->extractResponseText($response);
             if ($text !== '') {
-                return array_map('trim', explode(',', $text));
+                return $this->parseSkillList($text);
             }
         }
 
         return [];
+    }
+
+    /**
+     * Parse an LLM skill-list response into a flat array of individual skill strings.
+     *
+     * Handles all common LLM output styles:
+     *   - Comma-separated:       "PHP, Laravel, MySQL"
+     *   - Newline-separated:     "PHP\nLaravel\nMySQL"
+     *   - Numbered list:         "1. PHP\n2. Laravel"
+     *   - Bullet list:           "- PHP\n• Laravel\n* MySQL"
+     *   - Semicolon-separated:   "PHP; Laravel; MySQL"
+     *   - Mixed:                 "PHP, Laravel\nMySQL; Vue"
+     */
+    private function parseSkillList(string $text): array
+    {
+        // Strip leading list markers on each line: "1. ", "2) ", "- ", "• ", "* "
+        // Flags: m = multiline (^ matches each line start), u = UTF-8 (handles • and similar bullets)
+        $text = (string) preg_replace('/^\s*(?:\d+[\.\)]\s*|[-•*]\s*)/mu', '', $text);
+        // Split on commas, semicolons, or any run of newlines/carriage-returns
+        $parts = (array) preg_split('/[,;]+|[\r\n]+/', $text);
+
+        return array_values(array_filter(array_map('trim', $parts), fn ($s) => $s !== ''));
     }
 
     /**

@@ -6,6 +6,7 @@ use App\Models\Job;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
 class AdminTest extends TestCase
@@ -19,6 +20,9 @@ class AdminTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+
+        // Prevent real Ollama HTTP calls (e.g. extractAndAttach on jobs.show).
+        Http::fake();
 
         $this->adminUser = User::factory()->create([
             'email' => 'admin@test.com',

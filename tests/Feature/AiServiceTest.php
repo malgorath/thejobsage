@@ -55,6 +55,59 @@ test('skill extraction returns array of skills', function () {
     expect($skills)->toContain('Laravel');
 });
 
+test('skill extraction parses newline-separated list', function () {
+    Http::fake([
+        config('ollama.api_url') => Http::response(['response' => "PHP\nLaravel\nMySQL"], 200),
+    ]);
+
+    $skills = $this->aiService->extractSkills('some resume text');
+
+    expect($skills)->toContain('PHP');
+    expect($skills)->toContain('Laravel');
+    expect($skills)->toContain('MySQL');
+    expect($skills)->toHaveCount(3);
+});
+
+test('skill extraction strips numbered list prefixes', function () {
+    Http::fake([
+        config('ollama.api_url') => Http::response(['response' => "1. PHP\n2. Laravel\n3. MySQL"], 200),
+    ]);
+
+    $skills = $this->aiService->extractSkills('some resume text');
+
+    expect($skills)->toContain('PHP');
+    expect($skills)->toContain('Laravel');
+    expect($skills)->toContain('MySQL');
+    expect($skills)->each(fn ($skill) => $skill->not->toContain('.'));
+});
+
+test('skill extraction strips bullet prefixes', function () {
+    Http::fake([
+        config('ollama.api_url') => Http::response(['response' => "- PHP\n• Laravel\n* MySQL"], 200),
+    ]);
+
+    $skills = $this->aiService->extractSkills('some resume text');
+
+    expect($skills)->toContain('PHP');
+    expect($skills)->toContain('Laravel');
+    expect($skills)->toContain('MySQL');
+    expect($skills)->toHaveCount(3);
+});
+
+test('skill extraction handles mixed separators', function () {
+    Http::fake([
+        config('ollama.api_url') => Http::response(['response' => "PHP, Laravel\nMySQL; Vue"], 200),
+    ]);
+
+    $skills = $this->aiService->extractSkills('some resume text');
+
+    expect($skills)->toContain('PHP');
+    expect($skills)->toContain('Laravel');
+    expect($skills)->toContain('MySQL');
+    expect($skills)->toContain('Vue');
+    expect($skills)->toHaveCount(4);
+});
+
 test('skill extraction returns empty array on connection failure', function () {
     Http::fake(function () {
         throw new Exception('connection refused');
