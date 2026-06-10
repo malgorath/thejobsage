@@ -42,7 +42,7 @@
 
         @if($candidate->anonymized_summary)
             <h5>Summary</h5>
-            <p>{{ $candidate->anonymized_summary }}</p>
+            @include('partials.structured-summary', ['rawSummary' => $candidate->anonymized_summary])
         @else
             <p class="text-muted">No summary available.</p>
         @endif

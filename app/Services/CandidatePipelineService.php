@@ -55,7 +55,7 @@ class CandidatePipelineService
         $job->load('listingSkills');
 
         $matchScore = $this->calculateMatchScore($job, $skillNames);
-        $summary    = $this->generateSummary($anonymizedText);
+        $summary    = $this->generateSummary($anonymizedText, $job);
 
         return [
             'anonymized_text'    => $anonymizedText,
@@ -195,7 +195,7 @@ class CandidatePipelineService
         $candidate->match_score = $this->calculateMatchScore($job, $resumeSkillNames);
 
         if (! empty($candidate->anonymized_text)) {
-            $newSummary = $this->generateSummary($candidate->anonymized_text);
+            $newSummary = $this->generateSummary($candidate->anonymized_text, $job);
             if ($newSummary !== '') {
                 $candidate->anonymized_summary = $newSummary;
             }
@@ -346,16 +346,51 @@ class CandidatePipelineService
     }
 
     /**
-     * Generate a 3-5 sentence anonymized professional summary via Ollama.
+     * Generate a structured three-section anonymized candidate summary via Ollama.
      *
-     * Returns an empty string on failure; callers treat '' as "no summary available."
+     * The summary contains **Professional Summary**, **Key Skills & Strengths**, and
+     * **Job Fit Assessment** sections. When a Job is supplied, the fit section references
+     * the actual job title and required skills. Returns '' on failure.
      */
-    private function generateSummary(string $anonymizedText): string
+    private function generateSummary(string $anonymizedText, ?Job $job = null): string
     {
+        $jobTitle   = $job?->title ?? 'this position';
+        $jobCompany = $job?->company ?? 'the company';
+        $jobSkills  = ($job && $job->listingSkills->isNotEmpty())
+            ? $job->listingSkills->pluck('name')->join(', ')
+            : 'not specified';
+
+        $fallback = <<<'PROMPT'
+You are an HR assistant writing an anonymized candidate brief for a hiring manager. Based solely on the anonymized resume below, produce a structured three-section assessment. Never include names, dates, school names, employer names, or any other identifying information.
+
+Use EXACTLY this format — include the bold section headers:
+
+**Professional Summary**
+[2–3 sentences: the candidate's overall experience level, professional domain, and career focus.]
+
+**Key Skills & Strengths**
+[2–3 sentences: the most notable technical skills, tools, and areas of depth.]
+
+**Job Fit Assessment**
+[2–3 sentences: a direct comparison of this candidate's background against the {{job_title}} role at {{job_company}}. Reference specific required skills ({{job_skills}}) and state whether the candidate appears well-suited, partially suited, or not well-matched.]
+
+Job Title: {{job_title}}
+Company: {{job_company}}
+Required Skills: {{job_skills}}
+
+Anonymized Resume:
+{{anonymized_text}}
+PROMPT;
+
         [$prompt, $config] = $this->ollamaService->promptPayload(
             'candidate_summary',
-            ['anonymized_text' => $anonymizedText],
-            "Write a 3-5 sentence professional summary of this candidate based on the anonymized resume below. Focus only on skills, experience level, and key accomplishments. Do not include or infer any names, dates, company names, school names, or other identifying information.\n\n{{anonymized_text}}"
+            [
+                'anonymized_text' => $anonymizedText,
+                'job_title'       => $jobTitle,
+                'job_company'     => $jobCompany,
+                'job_skills'      => $jobSkills,
+            ],
+            $fallback
         );
 
         try {

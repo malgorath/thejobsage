@@ -71,7 +71,7 @@
         <div class="mb-4">
             <h6 class="fw-semibold text-muted text-uppercase small mb-2">Anonymized Summary</h6>
             @if(!empty($staged['result']['anonymized_summary']))
-                <p class="mb-0">{{ $staged['result']['anonymized_summary'] }}</p>
+                @include('partials.structured-summary', ['rawSummary' => $staged['result']['anonymized_summary']])
             @else
                 <span class="text-muted">No summary generated</span>
             @endif

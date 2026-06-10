@@ -65,7 +65,27 @@ PROMPT,
             [
                 'key' => 'candidate_summary',
                 'title' => 'Anonymized Candidate Summary',
-                'body' => "Write a 3-5 sentence professional summary of this candidate based on the anonymized resume below. Focus only on skills, experience level, and key accomplishments. Do not include or infer any names, dates, company names, school names, or other identifying information.\n\n{{anonymized_text}}",
+                'body' => <<<'PROMPT'
+You are an HR assistant writing an anonymized candidate brief for a hiring manager. Based solely on the anonymized resume below, produce a structured three-section assessment. Never include names, dates, school names, employer names, or any other identifying information.
+
+Use EXACTLY this format — include the bold section headers:
+
+**Professional Summary**
+[2–3 sentences: the candidate's overall experience level, professional domain, and career focus.]
+
+**Key Skills & Strengths**
+[2–3 sentences: the most notable technical skills, tools, and areas of depth.]
+
+**Job Fit Assessment**
+[2–3 sentences: a direct comparison of this candidate's background against the {{job_title}} role at {{job_company}}. Reference specific required skills ({{job_skills}}) and state whether the candidate appears well-suited, partially suited, or not well-matched.]
+
+Job Title: {{job_title}}
+Company: {{job_company}}
+Required Skills: {{job_skills}}
+
+Anonymized Resume:
+{{anonymized_text}}
+PROMPT,
             ],
             [
                 'key' => 'skill_gap_summary',
