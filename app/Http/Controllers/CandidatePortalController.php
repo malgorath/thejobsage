@@ -75,9 +75,12 @@ class CandidatePortalController extends Controller
             return back()->with('info', "You've already applied for this position. Check your email for your status link.");
         }
 
-        $file         = $request->file('resume');
-        $slug         = Str::slug(pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME));
-        $safeFilename = $slug.'_'.time().'.'.$file->getClientOriginalExtension();
+        $file = $request->file('resume');
+
+        // Generate a fully anonymized filename — never derived from the original
+        // (which often embeds the candidate's name, e.g. "jane-doe-resume.pdf").
+        // Only the extension from the original file is preserved.
+        $anonymizedFilename = 'resume_'.time().'.'.$file->getClientOriginalExtension();
 
         // Extract text before creating any DB record — the raw binary is never stored.
         $rawText = $this->extractor->extractContent(
@@ -96,7 +99,7 @@ class CandidatePortalController extends Controller
         session([
             'portal_submission_review' => [
                 'job_id'          => $job->id,
-                'filename'        => $safeFilename,
+                'filename'        => $anonymizedFilename,
                 'mime_type'       => $file->getClientMimeType(),
                 'candidate_email' => $request->candidate_email,
                 'result'          => $result,

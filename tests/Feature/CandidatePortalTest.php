@@ -148,6 +148,22 @@ test('review screen shows anonymized profile, no PII', function () {
     $response->assertSee('Not yet saved');
 });
 
+test('review screen never shows the original uploaded filename', function () {
+    $job = Job::factory()->create(['is_closed' => false]);
+    $file = UploadedFile::fake()->create('jane-doe-resume.pdf', 100, 'application/pdf');
+
+    $this->post(route('portal.submit', $job->id), [
+        'candidate_email' => 'applicant@example.com',
+        'resume' => $file,
+    ]);
+
+    $response = $this->get(route('portal.review', $job->id));
+
+    $response->assertStatus(200);
+    $response->assertDontSee('jane-doe-resume.pdf');
+    expect(session('portal_submission_review.filename'))->not->toContain('jane-doe');
+});
+
 test('review screen redirects to apply form when no staged submission exists', function () {
     $job = Job::factory()->create(['is_closed' => false]);
 
@@ -184,6 +200,22 @@ test('candidate accepting the processed profile saves the record', function () {
 
     // Session is cleared after acceptance.
     expect(session('portal_submission_review'))->toBeNull();
+});
+
+test('original uploaded filename is never persisted to the database', function () {
+    $job = Job::factory()->create(['is_closed' => false]);
+    $file = UploadedFile::fake()->create('jane-doe-resume.pdf', 100, 'application/pdf');
+
+    $this->post(route('portal.submit', $job->id), [
+        'candidate_email' => 'applicant@example.com',
+        'resume' => $file,
+    ]);
+    $this->post(route('portal.review.confirm', $job->id));
+
+    $resume = Resume::first();
+    expect($resume)->not->toBeNull();
+    expect($resume->filename)->not->toContain('jane-doe');
+    expect($resume->filename)->toMatch('/^resume_\d+\.pdf$/');
 });
 
 test('accepting the processed profile sends confirmation mail', function () {
