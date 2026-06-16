@@ -8,6 +8,7 @@ use App\Models\Job;
 use App\Models\Resume;
 use App\Models\User;
 use App\Services\CandidatePipelineService;
+use App\Services\ResumeTextExtractor;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Mail;
@@ -17,10 +18,20 @@ beforeEach(function () {
     Mail::fake();
 });
 
-test('confirmation mail is queued after portal submission', function () {
+test('confirmation mail is queued after candidate accepts the reviewed profile', function () {
+    $this->mock(ResumeTextExtractor::class)
+        ->shouldReceive('extractContent')
+        ->andReturn('Senior PHP developer with Laravel experience.');
+
     $this->mock(CandidatePipelineService::class, function ($mock) {
-        $mock->shouldReceive('processRaw')->andReturnUsing(function (Candidate $candidate, string $rawText) {
-            $candidate->update(['status' => 'analyzed', 'match_score' => 60]);
+        $mock->shouldReceive('runPipeline')->andReturn([
+            'anonymized_text'    => 'Backend developer with strong PHP skills.',
+            'skills'             => ['PHP', 'Laravel'],
+            'match_score'        => 60,
+            'anonymized_summary' => 'Experienced developer.',
+        ]);
+        $mock->shouldReceive('persistResult')->andReturnUsing(function (Candidate $candidate, array $result) {
+            $candidate->update(['status' => 'analyzed', 'match_score' => $result['match_score']]);
         });
     });
 
@@ -31,6 +42,11 @@ test('confirmation mail is queued after portal submission', function () {
         'candidate_email' => 'portal@example.com',
         'resume' => $file,
     ]);
+
+    // No mail until the candidate explicitly accepts the reviewed profile.
+    Mail::assertNothingQueued();
+
+    $this->post(route('portal.review.confirm', $job->id));
 
     Mail::assertQueued(CandidateConfirmationMail::class, 1);
     Mail::assertQueued(CandidateConfirmationMail::class, function ($mail) {

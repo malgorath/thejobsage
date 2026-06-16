@@ -48,8 +48,11 @@ class CandidatePortalController extends Controller
     /**
      * Handle portal application submission.
      *
-     * Creates a Resume and Candidate record, runs the full analysis pipeline
-     * synchronously, then queues a CandidateConfirmationMail with the tracking token.
+     * Runs the full LLM pipeline (PII stripping, skill extraction, summary
+     * generation) synchronously and stages the anonymized result in the
+     * session for the candidate to review. No database record is created
+     * here — the candidate must explicitly accept the reviewed profile
+     * (see review() / confirmSubmission()) before anything is persisted.
      * Duplicate applications (same email + job) are blocked with a friendly message.
      */
     public function submit(Request $request, Job $job): RedirectResponse
@@ -76,34 +79,117 @@ class CandidatePortalController extends Controller
         $slug         = Str::slug(pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME));
         $safeFilename = $slug.'_'.time().'.'.$file->getClientOriginalExtension();
 
-        // Extract text before creating the DB record — the raw binary is never stored.
+        // Extract text before creating any DB record — the raw binary is never stored.
         $rawText = $this->extractor->extractContent(
             file_get_contents($file->getRealPath()),
             $file->getMimeType()
         ) ?? '';
 
+        if (empty(trim($rawText))) {
+            return back()->withErrors([
+                'resume' => 'Could not extract text from this file. Ensure the file is not password-protected or corrupted.',
+            ]);
+        }
+
+        $result = $this->pipeline->runPipeline($rawText, $job);
+
+        session([
+            'portal_submission_review' => [
+                'job_id'          => $job->id,
+                'filename'        => $safeFilename,
+                'mime_type'       => $file->getClientMimeType(),
+                'candidate_email' => $request->candidate_email,
+                'result'          => $result,
+            ],
+        ]);
+
+        return redirect()->route('portal.review', $job);
+    }
+
+    /**
+     * Show the staged, anonymized profile so the candidate can review it
+     * before deciding to save or discard it.
+     *
+     * Redirects back to the application form when there is no staged
+     * result in session or when it does not belong to this job.
+     */
+    public function review(Job $job): View|RedirectResponse
+    {
+        $staged = session('portal_submission_review');
+
+        if (! $staged || ($staged['job_id'] ?? null) !== $job->id) {
+            return redirect()
+                ->route('portal.apply', $job)
+                ->with('info', 'No pending submission to review. Please submit your resume first.');
+        }
+
+        return view('portal.review', compact('job', 'staged'));
+    }
+
+    /**
+     * Persist the staged, anonymized profile and clear the session.
+     *
+     * Redirects back to the application form when the session is missing or stale.
+     */
+    public function confirmSubmission(Job $job): RedirectResponse
+    {
+        $staged = session('portal_submission_review');
+
+        if (! $staged || ($staged['job_id'] ?? null) !== $job->id) {
+            return redirect()->route('portal.apply', $job);
+        }
+
+        $alreadyApplied = Candidate::where('job_id', $job->id)
+            ->where('candidate_email', $staged['candidate_email'])
+            ->exists();
+
+        if ($alreadyApplied) {
+            session()->forget('portal_submission_review');
+
+            return redirect()
+                ->route('portal.apply', $job)
+                ->with('info', "You've already applied for this position. Check your email for your status link.");
+        }
+
+        session()->forget('portal_submission_review');
+
         $resume = Resume::create([
             'user_id'     => null,
             'uploaded_by' => null,
-            'filename'    => $safeFilename,
-            'mime_type'   => $file->getClientMimeType(),
+            'filename'    => $staged['filename'],
+            'mime_type'   => $staged['mime_type'],
         ]);
 
         $candidate = Candidate::create([
             'job_id'           => $job->id,
             'resume_id'        => $resume->id,
             'uploaded_by'      => null,
-            'candidate_email'  => $request->candidate_email,
+            'candidate_email'  => $staged['candidate_email'],
             'submission_token' => Str::uuid()->toString(),
             'status'           => 'pending_analysis',
         ]);
 
-        $this->pipeline->processRaw($candidate, $rawText);
-        $candidate->refresh();
+        $this->pipeline->persistResult($candidate, $staged['result']);
 
         Mail::to($candidate->candidate_email)->queue(new CandidateConfirmationMail($candidate));
 
         return redirect()->route('portal.submitted');
+    }
+
+    /**
+     * Reject the staged, anonymized profile and discard it entirely.
+     *
+     * No Resume or Candidate record is ever created — the staged session
+     * data (including the anonymized result) is simply dropped, and the
+     * candidate is sent back to the job listing.
+     */
+    public function rejectSubmission(Job $job): RedirectResponse
+    {
+        session()->forget('portal_submission_review');
+
+        return redirect()
+            ->route('jobs.show', $job)
+            ->with('info', 'Submission discarded. Nothing was saved.');
     }
 
     /**

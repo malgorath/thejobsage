@@ -24,6 +24,9 @@ Route::get('/jobs/{job}', [JobController::class, 'show'])->name('jobs.show')
 Route::middleware('throttle:20,1')->group(function () {
     Route::get('/jobs/{job}/apply', [CandidatePortalController::class, 'form'])->name('portal.apply');
     Route::post('/jobs/{job}/apply', [CandidatePortalController::class, 'submit'])->name('portal.submit');
+    Route::get('/jobs/{job}/apply/review', [CandidatePortalController::class, 'review'])->name('portal.review');
+    Route::post('/jobs/{job}/apply/review/confirm', [CandidatePortalController::class, 'confirmSubmission'])->name('portal.review.confirm');
+    Route::post('/jobs/{job}/apply/review/reject', [CandidatePortalController::class, 'rejectSubmission'])->name('portal.review.reject');
 });
 Route::get('/portal/submitted', [CandidatePortalController::class, 'submitted'])->name('portal.submitted');
 Route::get('/submissions/{token}', [CandidatePortalController::class, 'status'])->name('portal.status');
