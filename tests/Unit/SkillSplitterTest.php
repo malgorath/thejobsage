@@ -126,6 +126,31 @@ test('C# is not split', function () {
 
 // ─── Realistic pipeline output ────────────────────────────────────────────────
 
+// ─── Prompt-bleed sanitization ────────────────────────────────────────────────
+
+test('filters out a full prompt-bleed sentence', function () {
+    $result = $this->splitter->split([
+        'here is the list of technical and professional skill words as a comma-separated array:',
+    ]);
+    expect($result)->toBe([]);
+});
+
+test('filters out a skill over 50 characters', function () {
+    $longSkill = str_repeat('a', 51);
+    $result = $this->splitter->split(['PHP', $longSkill]);
+    expect($result)->toBe(['PHP']);
+});
+
+test('filters out a skill containing a colon', function () {
+    $result = $this->splitter->split(['PHP', 'Note: this is not a skill']);
+    expect($result)->toBe(['PHP']);
+});
+
+test('valid short skills pass through unchanged', function () {
+    $result = $this->splitter->split(['PHP', 'Laravel', 'CI/CD']);
+    expect($result)->toBe(['PHP', 'Laravel', 'CI/CD']);
+});
+
 test('processes realistic LLM output array correctly', function () {
     $input = [
         'PHP (Laravel)',

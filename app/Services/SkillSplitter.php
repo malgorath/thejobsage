@@ -36,6 +36,27 @@ class SkillSplitter
     ];
 
     /**
+     * Maximum length, in characters, for a single atomic skill name.
+     * Anything longer is assumed to be LLM prompt bleed rather than a real skill.
+     */
+    private const MAX_SKILL_LENGTH = 50;
+
+    /**
+     * Case-insensitive substrings that indicate the LLM echoed part of its own
+     * instructions instead of returning a clean skill name.
+     *
+     * @var string[]
+     */
+    private const PROMPT_BLEED_PATTERNS = [
+        'here is',
+        'the list',
+        'as a comma',
+        'separated array',
+        'following',
+        'please provide',
+    ];
+
+    /**
      * Expand a list of raw LLM skill strings into deduplicated atomic skills.
      *
      * @param  string[]  $skills
@@ -51,7 +72,67 @@ class SkillSplitter
             }
         }
 
-        return $this->deduplicate($atoms);
+        return $this->sanitize($this->deduplicate($atoms));
+    }
+
+    /**
+     * Filter out entries that are not plausible atomic skill names — typically
+     * LLM prompt bleed (the model echoing its own instructions) rather than an
+     * actual skill. Runs after splitting/deduplication and before persistence.
+     *
+     * Rules:
+     *   1. Drop skills longer than {@see MAX_SKILL_LENGTH} characters (trimmed).
+     *   2. Drop skills containing a colon (':').
+     *   3. Drop skills matching a known prompt-bleed phrase (case-insensitive).
+     *   4. Trim whitespace from all remaining skills.
+     *   5. Drop empty strings left after trimming.
+     *
+     * @param  string[]  $skills
+     * @return string[]
+     */
+    private function sanitize(array $skills): array
+    {
+        $result = [];
+
+        foreach ($skills as $skill) {
+            $trimmed = trim($skill);
+
+            if ($trimmed === '') {
+                continue;
+            }
+
+            if (mb_strlen($trimmed) > self::MAX_SKILL_LENGTH) {
+                continue;
+            }
+
+            if (str_contains($trimmed, ':')) {
+                continue;
+            }
+
+            if ($this->containsPromptBleed($trimmed)) {
+                continue;
+            }
+
+            $result[] = $trimmed;
+        }
+
+        return $result;
+    }
+
+    /**
+     * Determine whether a skill string contains a known LLM prompt-bleed phrase.
+     */
+    private function containsPromptBleed(string $skill): bool
+    {
+        $lower = mb_strtolower($skill);
+
+        foreach (self::PROMPT_BLEED_PATTERNS as $pattern) {
+            if (str_contains($lower, $pattern)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
